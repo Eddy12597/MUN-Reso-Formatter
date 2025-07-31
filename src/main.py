@@ -1,8 +1,40 @@
-from docx.api import Document;
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.api import Document
 
-document = Document("../tests/inputs/test1.docx");
+import document as doc
+
+def main():
+    
+
+
+    """
+    Step 1: Read doc and parse to object
+    """
+
+
+    
+
+    """
+    Step 2: Format object
+    """
 
 
 
-document.save("../tests/outputs/test1.docx");
+
+    """
+    Step 3: Conflict showing, resolution and confirmation
+    """
+
+
+
+
+    """
+    Step 4: Write to file
+    """
+
+
+
+
+    doc.doc.save(f"../tests/outputs/{doc.file_name}")
+    
+if __name__ == "__main__":
+    main()

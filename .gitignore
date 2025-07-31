@@ -1,4 +1,7 @@
-src/__pychache__/
+# Python bytecode cache
+**/__pycache__/
+*.py[cod]
+*$py.class
 
 # Virtual environments
 venv/
