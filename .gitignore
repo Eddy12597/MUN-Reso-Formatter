@@ -1,0 +1,15 @@
+src/__pychache__/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE files (e.g., PyCharm, VSCode)
+.idea/
+.vscode/
+
+# Build/distribution files
+build/
+dist/
+*.egg-info/
