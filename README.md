@@ -9,6 +9,7 @@ Docx-basd Python App for formatting MUN Resolutions. May be integrated into [web
 
 
 # Resolution Format:
+The resolution should have Times New Roman font family with font size 12 and double spacing.
 ---
 ## Header
 
