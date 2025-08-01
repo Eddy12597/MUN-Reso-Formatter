@@ -1,4 +1,5 @@
 from preambs import *
+from operationals import *
 import document as doc
 
 class Resolution:
