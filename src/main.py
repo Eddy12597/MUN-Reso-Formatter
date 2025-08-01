@@ -34,7 +34,7 @@ def main():
 
 
 
-    doc.doc.save(f"../tests/outputs/{doc.file_name}")
+    
     
 if __name__ == "__main__":
     main()
