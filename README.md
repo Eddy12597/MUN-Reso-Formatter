@@ -3,9 +3,10 @@ Docx-basd Python App for formatting MUN Resolutions. May be integrated into [web
 
 ### TODO:
 1. Finish app logic
-2. Develop GUI (with input fields and upload file)
-3. Integrate to website if appropriate
-4. (Far future) allow amendment logic and apply amendments (though probably nobody cares)
+2. Fix alignment centering
+3. Develop GUI (with input fields and upload file)
+4. Integrate to website if appropriate
+5. (Far future) allow amendment logic and apply amendments (though probably nobody cares)
 
 
 # Resolution Format:
