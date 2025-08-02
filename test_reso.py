@@ -41,14 +41,15 @@ def test_toDocParagraph():
         ]
     )
 
-    # Create document
     doc_out = doc.document(
         inputfile="tests/inputs/test1.docx",
-        outputfile="tests/outputs/test_reso.docx"
+        outputfile="tests/outputs/test_reso.docx",
+        line_spacing = 2,
     )
 
     for cl in [c1, c2]:
         for para in cl.toDocParagraphs():
+            # para.line_spacing = 2
             doc_out.append(para)
 
     doc_out.save()
