@@ -1,6 +1,6 @@
 from icecream import ic
 from docx.api import Document
-import src.document as doc
+import document as doc
 
 class subsubclause:
     def __init__(self,
