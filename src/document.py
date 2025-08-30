@@ -278,10 +278,43 @@ class document:
         self._doc.styles[overallstyle].font.size = Pt(fontsize) # type: ignore
         self._doc.styles[overallstyle].paragraph_format.line_spacing = line_spacing # type: ignore
         
-    def append(self, paragraph : paragraph) -> 'document': # makes chaining easier
-        self.paragraphs.append(paragraph)
-        paragraph.render(self._doc)
+    def append(self, paragraph: paragraph, index: int | None = None) -> 'document':
+        """
+        Append or insert a paragraph to the document.
+        
+        Args:
+            paragraph: The paragraph object to add
+            index: Optional index position to insert at. If None, appends to end.
+        
+        Returns:
+            document: Self for method chaining
+        """
+        if index is None:
+            # Append to the end
+            self.paragraphs.append(paragraph)
+            paragraph.render(self._doc)
+        else:
+            # Insert at specified index
+            self.paragraphs.insert(index, paragraph)
+            
+            # Clear the current document content and re-render all paragraphs
+            self.rebuild_document()
+        
         return self
+
+    def rebuild_document(self) -> None:
+        """
+        Rebuild the document by clearing all content and re-rendering all paragraphs.
+        This is necessary when inserting paragraphs at specific positions.
+        """
+        # Clear all existing paragraphs from the document
+        for element in self._doc.element.body:
+            if element.tag.endswith('p'):  # Remove paragraph elements
+                self._doc.element.body.remove(element)
+        
+        # Re-render all paragraphs in the correct order
+        for para in self.paragraphs:
+            para.render(self._doc)
     
     def remove(self, paragraph: paragraph) -> None:
         self.paragraphs.remove(paragraph)
@@ -291,4 +324,202 @@ class document:
         self._doc.save(outputfile)
         print(f"File saved to {outputfile}")
     def getdocument(self) -> 'Document': # type: ignore
-        return self._doc        
+        return self._doc
+
+    def get_paragraphs(self) -> list[str]:
+        """
+        Returns a list of text content from all paragraphs in the document,
+        including proper hierarchical numbering information.
+        """
+        paragraphs_text = []
+        # Track numbering state for each list and level
+        numbering_states = {}
+        current_list_context = None
+        
+        for i, paragraph in enumerate(self._doc.paragraphs):
+            text = paragraph.text.strip()
+            if not text:
+                continue
+                
+            # Extract numbering information with proper hierarchy
+            numbering_text, list_context = self._extract_hierarchical_numbering(
+                paragraph, numbering_states, current_list_context
+            )
+            
+            if list_context:
+                current_list_context = list_context
+                
+            if numbering_text:
+                paragraphs_text.append(f"{numbering_text} {text}")
+            else:
+                paragraphs_text.append(text)
+        
+        return paragraphs_text
+
+    def _extract_hierarchical_numbering(self, 
+                                        paragraph,
+                                        numbering_states, 
+                                        current_list_context) -> tuple:
+        """
+        Extract numbering information from a paragraph - show only current level number.
+        """
+        try:
+            pPr = paragraph._p.pPr
+            if pPr is None:
+                return "", current_list_context
+                
+            numPr = pPr.numPr
+            if numPr is None:
+                return "", current_list_context
+                
+            # Get numbering ID and level
+            numId_elem = numPr.numId
+            ilvl_elem = numPr.ilvl
+            
+            if numId_elem is None or ilvl_elem is None:
+                return "", current_list_context
+                
+            numId = numId_elem.val
+            ilvl = ilvl_elem.val
+            
+            if numId is None or ilvl is None:
+                return "", current_list_context
+                
+            # Get numbering definition
+            numbering_part = self._doc.part.numbering_part
+            if numbering_part is None:
+                return "", current_list_context
+                
+            # Find the abstract numbering definition
+            abstract_num_id = self._get_abstract_num_id(numbering_part, numId)
+            if abstract_num_id is None:
+                return "", current_list_context
+                
+            # Create a key for this numbering context
+            list_context = (numId, abstract_num_id)
+            
+            # Initialize numbering state if it doesn't exist
+            if list_context not in numbering_states:
+                numbering_states[list_context] = {}
+                
+            # Get numbering format for this level
+            num_format = self._get_number_format(numbering_part, abstract_num_id, ilvl)
+            if not num_format:
+                return "", list_context
+                
+            # Update numbering state
+            level_state = numbering_states[list_context]
+            
+            # Reset higher levels if we're going back to a lower level
+            for l in range(ilvl + 1, 10):  # Assuming max 10 levels
+                if l in level_state:
+                    del level_state[l]
+                    
+            # Initialize or increment current level
+            if ilvl not in level_state:
+                level_state[ilvl] = 0
+            level_state[ilvl] += 1
+            
+            # Return ONLY the current level's number (not the full hierarchy)
+            current_number = self._format_number(level_state[ilvl], num_format)
+            
+            return current_number + ".", list_context
+            
+        except (AttributeError, TypeError, KeyError):
+            return "", current_list_context
+
+    def _continue_current_numbering(self, list_context, numbering_states):
+        """
+        Continue the current numbering without incrementing the level.
+        Returns only the current level's number.
+        """
+        if list_context not in numbering_states:
+            return ""
+            
+        level_state = numbering_states[list_context]
+        if not level_state:
+            return ""
+            
+        # Find the highest level with a value (current level)
+        if not level_state:
+            return ""
+            
+        current_level = max(level_state.keys())
+        current_number = level_state[current_level]
+        
+        # Get numbering format for current level
+        numbering_part = self._doc.part.numbering_part
+        if numbering_part is None:
+            return ""
+            
+        abstract_num_id = list_context[1]
+        num_format = self._get_number_format(numbering_part, abstract_num_id, current_level)
+        
+        # Format only the current level's number
+        formatted_number = self._format_number(current_number, num_format or "decimal")
+        
+        return formatted_number + "."
+
+    def _get_abstract_num_id(self, numbering_part, numId):
+        """Get the abstract numbering ID for a concrete numbering ID."""
+        for num in numbering_part.element.findall(qn('w:num')):
+            if num.get(qn('w:numId')) == str(numId):
+                abstractNumId = num.find(qn('w:abstractNumId'))
+                if abstractNumId is not None:
+                    return abstractNumId.get(qn('w:val'))
+        return None
+
+    def _get_number_format(self, numbering_part, abstract_num_id, ilvl):
+        """Get the number format for a specific level in a numbering definition."""
+        for abstractNum in numbering_part.element.findall(qn('w:abstractNum')):
+            if abstractNum.get(qn('w:abstractNumId')) == abstract_num_id:
+                for lvl in abstractNum.findall(qn('w:lvl')):
+                    if lvl.get(qn('w:ilvl')) == str(ilvl):
+                        numFmt = lvl.find(qn('w:numFmt'))
+                        if numFmt is not None:
+                            return numFmt.get(qn('w:val'))
+        return None
+
+    def _format_number(self, number, num_format):
+        """Format a number according to the specified format."""
+        format_map = {
+            'decimal': str(number),
+            'lowerLetter': self._number_to_letters(number).lower(),
+            'upperLetter': self._number_to_letters(number),
+            'lowerRoman': self._number_to_roman(number).lower(),
+            'upperRoman': self._number_to_roman(number),
+            'bullet': '•',
+        }
+        
+        return format_map.get(num_format, str(number))
+
+    def _number_to_letters(self, num):
+        """Convert a number to letters (1 = A, 2 = B, ..., 27 = AA, etc.)."""
+        letters = ''
+        while num > 0:
+            num, remainder = divmod(num - 1, 26)
+            letters = chr(65 + remainder) + letters
+        return letters
+
+    def _number_to_roman(self, num):
+        """Convert a number to Roman numerals."""
+        val = [
+            1000, 900, 500, 400,
+            100, 90, 50, 40,
+            10, 9, 5, 4,
+            1
+        ]
+        syb = [
+            "M", "CM", "D", "CD",
+            "C", "XC", "L", "XL",
+            "X", "IX", "V", "IV",
+            "I"
+        ]
+        roman_num = ''
+        i = 0
+        while num > 0:
+            for _ in range(num // val[i]):
+                roman_num += syb[i]
+                num -= val[i]
+            i += 1
+        return roman_num
