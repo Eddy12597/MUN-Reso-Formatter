@@ -1,5 +1,5 @@
 from docx.api import Document
-import src.document as doc
+import document as doc
 
 class preamb:
     def __init__(self, adverb: str = "Adverb",
