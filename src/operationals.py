@@ -20,6 +20,8 @@ class subclause:
         if (not self.text.endswith(',')) or (not self.text.endswith(', ')):
             self.text += ","
         self.listsubsubclauses = listsubsubclauses if listsubsubclauses is not None else []
+    def append(self, ssc: subsubclause) -> None:
+        self.listsubsubclauses.append(ssc)
 
 class clause:
     def __init__(self,
@@ -33,6 +35,8 @@ class clause:
         if (not self.text.endswith(',')) or (not self.text.endswith(', ')):
             self.text += ','
         self.listsubclauses = listsubclauses if listsubclauses is not None else []
+    def append(self, sc: subclause) -> None:
+        self.listsubclauses.append(sc)
         
     def toDocParagraphs(self) -> list[doc.paragraph]:
         paragraphs = []
