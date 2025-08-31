@@ -127,6 +127,65 @@ if output_filename == '':
 else:
     output_filename = Path(output_filename)
 
+class ResolutionComponent:
+    def __init__(self, startIdx: int, endIdx: int, pattern: str, currentIdx: int = 0):
+        self.startIdx = startIdx
+        self.endIdx = endIdx
+        self.pattern = pattern
+        self.currentIdx = currentIdx
+        self.parsed = False
+        self.values: list[str] = [] # single element list if not a list
+        self.result: re.Match | None = None
+        self.found = False
+    
+    def extract(self, text: str, flag: int | None = None) -> None:
+        """Extract content using the pattern and store result"""
+        self.result = self.getContentFrom(text, flag)
+        if self.result is not None:
+            extracted_value = self.result.group(1).strip() if self.result.groups() else self.result.group(0).strip()
+            self.values.append(extracted_value)
+            self.found = True
+            self.parsed = True
+    
+    def getContentFrom(self, text: str, flag: int | None = None) -> re.Match | None:
+        """Search for pattern in text with optional flags"""
+        if flag is not None:
+            return re.search(self.pattern, text, flag)
+        return re.search(self.pattern, text)
+    
+    def setValue(self, values: list[str]) -> None:
+        """Set the value list directly"""
+        self.values = values
+    
+    def appendValue(self, newValue: str) -> None:
+        """Append a new value to the value list"""
+        self.values.append(newValue)
+    
+    def getValue(self) -> list[str]:
+        """Get the current value list"""
+        return self.values
+    
+    def getStringValue(self) -> str:
+        """Get value as string (first value or empty string)"""
+        return self.values[0] if self.values else ""
+    
+    def getListValue(self, delimiter: str = ",") -> list[str]:
+        """Get values as list, splitting by delimiter if single string value exists"""
+        if not self.values:
+            return []
+        
+        # If we have multiple values, return them as is
+        if len(self.values) > 1:
+            return self.values
+        
+        # If we have one value that might contain delimiters, split it
+        if delimiter in self.values[0]:
+            return [item.strip() for item in self.values[0].split(delimiter)]
+        
+        return self.values
+    
+
+# TODO: refactor this, create a ResolutionComponent class for storing the parse status
 def parseToResolution(document: doc.document) -> tuple[Resolution, int, int, int, int, int, int, int, int]:
     reso: Resolution
     paragraphs = document.get_paragraphs()
