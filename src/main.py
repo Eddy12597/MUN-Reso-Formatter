@@ -210,45 +210,56 @@ class ResolutionComponent(Generic[T]):
         return self.getValues()
     
 # shuts pylance up
-type _rc_type = ResolutionComponent[str | preamb | clause]
+type _rc_inner_t = str | preamb | clause
+type _rc_t = ResolutionComponent[_rc_inner_t]
 
 def parseToResolution (doc: doc.document)\
-      -> tuple[Resolution, dict[str, ResolutionComponent[str | preamb | clause]]]:
-        
-    components: dict[str, ResolutionComponent[str | preamb | clause]] = {}
+      -> tuple[Resolution, dict[str, ResolutionComponent[str | preamb | clause]], list[ResolutionParsingError]]:
     
-    components['committee'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+    paragraphs = doc.get_paragraphs()
+
+    components: dict[str, ResolutionComponent[str | preamb | clause]] = {}
+    errorList: list[ResolutionParsingError] = []
+
+    components['committee'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'committee: (.*)',r'comittee: (.*)', r'commitee: (.*)',
-        
         r'committee:(.*)', r'comittee:(.*)', r'commitee:(.*)',
     ]))
 
-    components['mainSubmitter'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+    components['mainSubmitter'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'main submitter: (.*)', r'main-submitter: (.*)',
-        r'main submitters: (.*)' r'main-submitters: (.*)'
-
+        r'main submitters: (.*)' r'main-submitters: (.*)',
         r'main submitter:(.*)', r'main-submitters:(.*)',
         r'main submitters:(.*)', r'main-submitters:(.*)',
     ]))
 
-    components['coSubmitters'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+    components['coSubmitters'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'co-submitters: (.*)', r'cosubmitters: (.*)',
         r'co-submitter: (.*)', r'cosubmitter: (.*)',
-
         r'co-submitters:(.*)', r'cosubmitters:(.*)',
         r'co-submitter:(.*)', r'cosubmitter:(.*)',
     ]))
 
-    components['topic'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+    components['topic'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'topic: (.*)', r'topics: (.*)',
         r'topic:(.*)', r'topics:(.*)',
     ]))
 
-    components['preambs'] = cast(_rc_type, ResolutionComponent[preamb]())
-    components['operationals'] = cast(_rc_type, ResolutionComponent[clause]())
+    listPreambs: list[preamb] = []
+    listOperationals: list[clause] = []
 
-    # Starts searching
-    # Todo: implement the main for loop
+    components['preambs'] = cast(_rc_t, ResolutionComponent[preamb]())
+    components['operationals'] = cast(_rc_t, ResolutionComponent[clause]())
+
+    # Main Loop
+    for index, line in enumerate(paragraphs):
+        raise NotImplementedError()
+
+    
+    components['preambs'].setValue(cast(list[_rc_inner_t], listPreambs))
+    components['preambs'].setFinished()
+    components['operationals'].setValue(cast(list[_rc_inner_t], listOperationals))
+    components['operationals'].setFinished()
 
     reso = Resolution(
         cast(str, components['committee'].getFirst()),
@@ -257,9 +268,10 @@ def parseToResolution (doc: doc.document)\
         cast(str, components['topic'].getFirst()),
     )
 
-    # remember to set preambs and operationals to reso
-    
-    return (reso, components)
+    reso.preambs = listPreambs
+    reso.clauses = listOperationals
+
+    return (reso, components, errorList)
 
 def main():
     
@@ -269,7 +281,7 @@ def main():
     """
     thedoc = doc.document(str(input_filename), str(output_filename))
     parseresult = parseToResolution(thedoc) #ai_generated.parseToResolution(thedoc)
-    thereso = parseresult[0]
+    thereso, components, errorList = parseresult
 
     print(str(thereso))
 

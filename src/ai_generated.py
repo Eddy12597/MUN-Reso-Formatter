@@ -343,3 +343,76 @@ def parseToResolution(document: doc.document) -> tuple[Resolution, int, int, int
         preambsEndIdx,
         operationalsStartIdx,
     )
+
+r"""
+# normalize paragraph to text
+        text = str(line)
+        text = text.strip()
+        if not text:
+            continue
+
+        # Try to extract header fields (case-insensitive)
+        for key in ('committee','mainSubmitter','coSubmitters','topic'):
+            comp = components[key]
+            if not comp.parsed:
+                comp.extract(text, re.I)
+                if comp.found:
+                    comp.setFinished()
+
+        # Preamb detection: participial phrase + remainder
+        adverbs, remaining = extract_first_participial_phrase(text)
+        if adverbs and adverbs[0] is not None:
+            adv = adverbs[0].strip()
+            content = remaining.strip()
+            # strip trailing commas/periods/semicolons; preamb.toDocParagraph will add comma
+            content = re.sub(r'^[\s,]+|[\s,]+$', '', content)
+            content = content.rstrip('.,;:')
+            listPreambs.append(preamb(adverb=adv, content=content))
+            continue
+
+        # Operational clause detection: verb at sentence start
+        verb, rest, begins = extract_first_verb(text)
+        if verb and begins:
+            cl = clause(index=len(listOperationals)+1, verb=verb.strip(), text=rest.strip() if rest is not None else "")
+            listOperationals.append(cl)
+            continue
+
+        # Subclause detection: forms like "a) ...", "b) ..."
+        m_sub = re.match(r'^[\(\[]?([a-z])[\)\]]\s*(.*)', text, re.I)
+        if m_sub:
+            if not listOperationals:
+                errorList.append(ResolutionParsingError(f"Subclause found before any clause at paragraph {index+1}: '{text}'"))
+                continue
+            content = m_sub.group(2).strip().rstrip('.,;:')
+            parent = listOperationals[-1]
+            sc = subclause(index=len(parent.listsubclauses)+1, text=content)
+            parent.append(sc)
+            continue
+
+        # Sub-subclause detection: roman numerals like "i. ..." or "(i) ..."
+        m_ssc = re.match(r'^[\(\[]?([ivxlcdm]+)[\)\].]?\s*(.*)', text, re.I)
+        if m_ssc:
+            if not listOperationals or not listOperationals[-1].listsubclauses:
+                errorList.append(ResolutionParsingError(f"Sub-subclause found with no parent at paragraph {index+1}: '{text}'"))
+                continue
+            content = m_ssc.group(2).strip().rstrip('.,;:')
+            last_sub = listOperationals[-1].listsubclauses[-1]
+            ssc = subsubclause(index=len(last_sub.listsubsubclauses)+1, text=content)
+            last_sub.append(ssc)
+            continue
+
+        # Fallback: continuation of previous clause/subclause (append)
+        if listOperationals:
+            last_clause = listOperationals[-1]
+            if last_clause.listsubclauses:
+                last_sub = last_clause.listsubclauses[-1]
+                last_sub.text = last_sub.text.rstrip(' ,') + ' ' + text
+            else:
+                last_clause.text = last_clause.text.rstrip(' ,') + ' ' + text
+            continue
+
+        # If nothing matched and no clause exists, we ignore or log
+        # (keeps parsing robust for unknown lines)
+        # ... no other action for this paragraph
+
+"""
