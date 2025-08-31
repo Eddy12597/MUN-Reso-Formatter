@@ -4,6 +4,8 @@ from pathlib import Path
 from resolution import *
 import re
 import roman
+import ai_generated
+from typing import Generic, TypeVar, cast
 
 print("Loading language package. This may take a while.")
 import spacy
@@ -46,10 +48,17 @@ def extract_first_participial_phrase(text: str) -> tuple[list[str | None], str]:
             # Extract the first participial phrase
             participial_phrase = ' '.join(phrase_tokens)
             remaining_text = ' '.join([t.text for t in doc[j:]])
+            remaining_text = remaining_text\
+                                .replace(' ,', ',')\
+                                .replace(' .', '.')\
+                                .replace(' ?', '?')\
+                                .replace(' !', '!')\
+                                .replace(' :', ':')\
+                                .replace(' ;', ';')
             print("Participial phrase: " + participial_phrase + ", remaining: " + remaining_text)
             return [participial_phrase], remaining_text
     
-    return [], text
+    return [None], text
 
 # Doesn't work for 'be' verbs and 'will' aux verbs
 def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
@@ -127,214 +136,132 @@ if output_filename == '':
 else:
     output_filename = Path(output_filename)
 
-class ResolutionComponent:
-    def __init__(self, startIdx: int, endIdx: int, pattern: str, currentIdx: int = 0):
+T = TypeVar('T')
+class ResolutionComponent(Generic[T]):
+    def __init__(self, startIdx: int = -1, endIdx: int = -1, patterns: list[str] | None = None, currentIdx: int = 0):
         self.startIdx = startIdx
         self.endIdx = endIdx
-        self.pattern = pattern
+        self.patterns = patterns if patterns is not None else [r'(.*)']
         self.currentIdx = currentIdx
         self.parsed = False
-        self.values: list[str] = [] # single element list if not a list
-        self.result: re.Match | None = None
+        self.values: list[T] = [] # single element list if not a list
+        self.results: list[re.Match | None] | None = None
         self.found = False
     
     def extract(self, text: str, flag: int | None = None) -> None:
         """Extract content using the pattern and store result"""
-        self.result = self.getContentFrom(text, flag)
-        if self.result is not None:
-            extracted_value = self.result.group(1).strip() if self.result.groups() else self.result.group(0).strip()
-            self.values.append(extracted_value)
-            self.found = True
-            self.parsed = True
+        if self.parsed: return
+        self.results = self.getContentFrom(text, flag)
+        if self.results is not None:
+            if any(self.results):
+                for result in self.results:
+                    if result is not None:
+                        extracted_value = result.group(1).strip() if result.groups() else result.group(0).strip()
+                        self.appendValue(extracted_value)
+                        self.found = True
+    def setFinished(self):
+        self.parsed = True
     
-    def getContentFrom(self, text: str, flag: int | None = None) -> re.Match | None:
+    def getContentFrom(self, text: str, flag: int | None = None) -> list[re.Match | None] | None: # None here because it returns early if its parsed already
         """Search for pattern in text with optional flags"""
+        if self.parsed: return
+        searchList: list[re.Match | None] = []
         if flag is not None:
-            return re.search(self.pattern, text, flag)
-        return re.search(self.pattern, text)
+            for pattern in self.patterns:
+                searchList.append(re.search(pattern, text, flag))
+            return searchList
+        for pattern in self.patterns:
+            searchList.append(re.search(pattern, text))
+        return searchList
     
-    def setValue(self, values: list[str]) -> None:
+    def setValue(self, values: list[T]) -> None:
         """Set the value list directly"""
         self.values = values
     
-    def appendValue(self, newValue: str) -> None:
+    def appendValue(self, newValue: T) -> None:
         """Append a new value to the value list"""
         self.values.append(newValue)
     
-    def getValue(self) -> list[str]:
+    def getValues(self) -> list[T]:
         """Get the current value list"""
         return self.values
     
-    def getStringValue(self) -> str:
-        """Get value as string (first value or empty string)"""
-        return self.values[0] if self.values else ""
+    def getFirst(self) -> T | str:
+        """Returns string value of first element if it exists, else an empty string"""
+        if self.values:
+            return self.values[0]
+        return ""
+        
     
-    def getListValue(self, delimiter: str = ",") -> list[str]:
-        """Get values as list, splitting by delimiter if single string value exists"""
-        if not self.values:
+    def getListValues(self, delimiter: str = ",") -> list[T] | None:
+        """Returns a list of values separated by a delimiter if the type is str"""
+        if self.values and not all(isinstance(val, str) for val in self.values):
+            return None
+        
+        if not self.getValues():
             return []
         
-        # If we have multiple values, return them as is
-        if len(self.values) > 1:
-            return self.values
+        if len(self.getValues()) > 1:
+            return self.getValues()
         
-        # If we have one value that might contain delimiters, split it
-        if delimiter in self.values[0]:
-            return [item.strip() for item in self.values[0].split(delimiter)]
+        first = self.getFirst()
+        if first is not None and isinstance(first, str) and delimiter in first:
+            return [item.strip() for item in first.split(delimiter)] # type: ignore
+        return self.getValues()
+    
+# shuts pylance up
+type _rc_type = ResolutionComponent[str | preamb | clause]
+
+def parseToResolution (doc: doc.document) -> tuple[
+        Resolution, dict[str,ResolutionComponent]
+    ]:
+
         
-        return self.values
+    components: dict[str, ResolutionComponent[str | preamb | clause]] = {}
     
+    components['committee'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+        r'committee: (.*)',r'comittee: (.*)', r'commitee: (.*)',
+        
+        r'committee:(.*)', r'comittee:(.*)', r'commitee:(.*)',
+    ]))
 
-# TODO: refactor this, create a ResolutionComponent class for storing the parse status
-def parseToResolution(document: doc.document) -> tuple[Resolution, int, int, int, int, int, int, int, int]:
-    reso: Resolution
-    paragraphs = document.get_paragraphs()
-    committeeIdx: int = -1
-    mainsubIdx: int = -1
-    cosubsIdx: int = -1
-    topicIdx: int = -1
-    committeeSubjectIdx: int = -1
-    preambsStartIdx: int = -1 # inclusive
-    preambsEndIdx:int = -1 # exclusive, like
-    operationalsStartIdx: int = -1
+    components['mainSubmitter'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+        r'main submitter: (.*)', r'main-submitter: (.*)',
+        r'main submitters: (.*)' r'main-submitters: (.*)'
 
-    currentClauseIdx: int = -1
-    currentSubClauseIdx: int = -1
-    currentSubSubClauseIdx: int = -1
+        r'main submitter:(.*)', r'main-submitters:(.*)',
+        r'main submitters:(.*)', r'main-submitters:(.*)',
+    ]))
+
+    components['coSubmitters'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+        r'co-submitters: (.*)', r'cosubmitters: (.*)',
+        r'co-submitter: (.*)', r'cosubmitter: (.*)',
+
+        r'co-submitters:(.*)', r'cosubmitters:(.*)',
+        r'co-submitter:(.*)', r'cosubmitter:(.*)',
+    ]))
+
+    components['topic'] = cast(_rc_type, ResolutionComponent[str](patterns=[
+        r'topic: (.*)', r'topics: (.*)',
+        r'topic:(.*)', r'topics:(.*)',
+    ]))
+
+    components['preambs'] = cast(_rc_type, ResolutionComponent[preamb]())
+    components['operationals'] = cast(_rc_type, ResolutionComponent[clause]())
+
+    # Starts searching
+    # Todo: implement the main for loop
+
+    reso = Resolution(
+        cast(str, components['committee'].getFirst()),
+        cast(str, components['mainSubmitter'].getFirst()),
+        cast(list[str], components['coSubmitters'].getListValues()),
+        cast(str, components['topic'].getFirst()),
+    )
+
+    # remember to set preambs and operationals to reso
     
-    # ALL LOWER CASE !!!
-    committeePattern = r'committee: (.*)'
-    mainsubPattern = r'main submitter: (.*)'
-    cosubsPattern = r'co-submitters: (.*)'
-    topicPattern = r'topic: (.*)'
-    committeeSubjectPattern = r'the (.*),'
-    # preambs start: after committee (correct) or after topic (incorrect, need to fix)
-    # preambs end: until '1.' (correct) or after committee as Subject (incorrect, need to fix)
-    operationalsStartPattern = r'1\. (.*)'
-    # operationalsIncorrectStartPattern: after the committee as subject
-
-
-    parsedList: dict[str, re.Match] = {} # stores list of things parsed in order
-
-    committeeName: str = 'Committee Name Not Found'
-    committeeSubject: str = 'Committee as Subject Not Found'
-    mainsubName: str = 'Main Submitter Not Found'
-    cosubsNameList: list[str] = ['Co Submitters Not Found']
-    topicName: str = 'Topic Not Found'
-    # for the committee Subject, just add 'The ' to the committee name
-    committeeSubjectPlacement: bool = False # whether committee subject is placed before preambs annd not after preambs
-    preambsList: list[preamb] = []
-    operationalsList: list[clause] = []
-    try:
-        print("Extracting document: ")
-        for i, p in enumerate(paragraphs):
-            print(f"{i}\t| {p}")
-            committeeSearch = re.search(committeePattern, p, re.IGNORECASE)
-            mainsubSearch = re.search(mainsubPattern, p, re.IGNORECASE)
-            cosubsSearch = re.search(cosubsPattern, p, re.IGNORECASE)
-            topicSearch = re.search(topicPattern, p, re.IGNORECASE)
-            committeeSubjectSearch = re.search(committeeSubjectPattern, p, re.IGNORECASE)
-            operationalsStartSearch = re.search(operationalsStartPattern, p, re.IGNORECASE)
-
-            if committeeSearch:
-                committeeName = committeeSearch.group(1).strip()
-                parsedList.update({'committee': committeeSearch})
-                committeeIdx = i
-                print("> Committee name extracted")
-                continue
-            if mainsubSearch:
-                mainsubName = mainsubSearch.group(1).strip()
-                parsedList.update({'main sub': mainsubSearch})
-                mainsubIdx = i
-                print("> Main submitter name extracted")
-                continue
-            if cosubsSearch:
-                cosubsNameList = cosubsSearch.group(1).strip().split(',')
-                parsedList.update({'co subs': cosubsSearch})
-                print("> Co submitters names extracted")
-                continue
-            if topicSearch:
-                topicName = topicSearch.group(1).strip()
-                parsedList.update({'topic': topicSearch})
-                print("> Topic name extracted")
-                continue
-            if committeeSubjectSearch: # found the phrase 'The ... committeee'
-                print("> Committee name detected as subject of resolution")
-                committeeSubject = committeeSubjectSearch.group(1).strip()
-                committeeSubjectPlacement = 'preambs start' in parsedList.keys()
-                # if not committeeSubjectPlacement: # hasn't parsed preambs
-                #     preambsStartIdx = i
-                #     print("===Preambs start extracted===")
-            
-            if operationalsStartSearch:
-                operationalsStartIdx = i
-                currentClauseIdx = 1
-                currentSubClauseIdx = 1
-                currentSubSubClauseIdx = 1
-                print("> Operationals start extracted")
-            
-            if preambsStartIdx != -1 and preambsEndIdx == -1: # preambs started, hasn't moved on to operationals
-                if p.startswith('1'):
-                    print("> Operationals start detected")
-                    preambsEndIdx = i
-                    operationalsStartIdx = i
-                    continue
-                # currently parsing preambs
-                print(f"Extracting participial from {p}")
-                [adverb], text = extract_first_participial_phrase(p)
-                if adverb is None:
-                    raise ResolutionParsingError(f"Preamb clause {i - preambsStartIdx + 1} doesn't start with participial")
-                preambsList.append(preamb(adverb, text))
-            
-            if operationalsStartIdx != -1: # found operationals
-                
-                # rest are just operationals
-                # exclude f'{i}. ', use regex
-                clauseSearch = re.search(rf'{currentClauseIdx}\. (.*)', p)
-                if clauseSearch:
-                    print("===Clause extracted===")
-                    clauseContent = clauseSearch.group(1).strip()
-                    augmentedSentence = f"The {committeeSubject} {clauseContent}"
-                    clauseVerb, clauseContent, verbAtBeginning = extract_first_verb(augmentedSentence)
-                    if (clauseVerb is None): #or (not verbAtBeginning):
-                        raise ResolutionParsingError(f"Clause {currentClauseIdx} ({augmentedSentence}) does not start with a verb")
-                    if clauseContent is None:
-                        raise ResolutionParsingError(f"Clause {currentClauseIdx} ({augmentedSentence}) does not contain main content")
-                    operationalsList.append(clause(currentClauseIdx, clauseVerb, clauseContent))
-                    currentClauseIdx += 1
-                    currentSubClauseIdx = 1
-                    currentSubSubClauseIdx = 1
-                
-                subclauseSearch = re.search(rf'{chr(96 + currentSubClauseIdx)}\. (.*)', p)
-                if subclauseSearch:
-                    print("===Sub clause extracted===")
-                    subclauseContent = subclauseSearch.group(1).strip()
-                    operationalsList[-1].append(subclause(currentSubClauseIdx, subclauseContent))
-                    currentSubClauseIdx += 1
-                
-                subsubclauseSearch = re.search(rf'{roman.toRoman(currentSubSubClauseIdx).lower()}\. (.*)', p)
-                if subsubclauseSearch:
-                    print("===Sub sub clause extracted===")
-                    subsubclauseContent = subsubclauseSearch.group(1).strip()
-                    operationalsList[-1].listsubclauses[-1].append(subsubclause(currentSubSubClauseIdx, subsubclauseContent))
-                    currentSubSubClauseIdx += 1
-
-
-
-    except ResolutionParsingError as rpe:
-        print("\t=== ERROR PARSING RESOLUTION / FORMATTING ERROR ===\n" + str(rpe))
-        print("Parsed List: " + str(parsedList) + "\n")
-    reso = Resolution(committeeName, mainsubName, cosubsNameList, topicName, preambsList, operationalsList)
-    return (reso,
-                committeeIdx,
-                mainsubIdx,
-                cosubsIdx,
-                topicIdx,
-                committeeSubjectIdx,
-                preambsStartIdx,
-                preambsEndIdx,
-                operationalsStartIdx,)
-    
+    return (reso, components)
 
 def main():
     
@@ -343,7 +270,7 @@ def main():
     Step 1: Read doc and parse to object
     """
     thedoc = doc.document(str(input_filename), str(output_filename))
-    parseresult = parseToResolution(thedoc)
+    parseresult = parseToResolution(thedoc) #ai_generated.parseToResolution(thedoc)
     thereso = parseresult[0]
 
     print(str(thereso))
