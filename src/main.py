@@ -212,10 +212,8 @@ class ResolutionComponent(Generic[T]):
 # shuts pylance up
 type _rc_type = ResolutionComponent[str | preamb | clause]
 
-def parseToResolution (doc: doc.document) -> tuple[
-        Resolution, dict[str,ResolutionComponent]
-    ]:
-
+def parseToResolution (doc: doc.document)\
+      -> tuple[Resolution, dict[str, ResolutionComponent[str | preamb | clause]]]:
         
     components: dict[str, ResolutionComponent[str | preamb | clause]] = {}
     
