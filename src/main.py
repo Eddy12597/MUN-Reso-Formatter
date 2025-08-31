@@ -12,8 +12,12 @@ import spacy
 nlp = spacy.load('en_core_web_sm')
 
 class ResolutionParsingError(BaseException):
-    def __init__(self, msg):
+    def __init__(self, msg: str, line: int):
         super().__init__(msg)
+        self.line = line
+    def __str__(self):
+        return super().__str__() + f"\n\tIN LINE {self.line}"
+        
 
 def extract_first_participial_phrase(text: str) -> tuple[list[str | None], str]:
     doc = nlp(text)
@@ -253,7 +257,7 @@ def parseToResolution (doc: doc.document)\
 
     # Main Loop
     for index, line in enumerate(paragraphs):
-        raise NotImplementedError()
+        print(f"{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * " "}| {line}")
 
     
     components['preambs'].setValue(cast(list[_rc_inner_t], listPreambs))
@@ -284,6 +288,11 @@ def main():
     thereso, components, errorList = parseresult
 
     print(str(thereso))
+
+    if (len(errorList) != 0):
+        print("="*30 + " ERRORS " + "=" * 30)
+        for error in errorList:
+            print(str(error))
 
     """
     Step 2: Format object
