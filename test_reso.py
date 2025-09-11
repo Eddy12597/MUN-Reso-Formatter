@@ -1,6 +1,6 @@
 # test_clause_export.py
 import src.document as doc
-from src.operationals import clause, subclause, subsubclause
+from core.operationals import clause, subclause, subsubclause
 
 def test_toDocParagraph():
     # Clause 1

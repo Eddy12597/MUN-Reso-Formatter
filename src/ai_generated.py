@@ -2,7 +2,7 @@ import re
 import spacy
 nlp = spacy.load('en_core_web_sm')
 import document as doc  # Assuming this is your document module
-from resolution import *
+from core.resolution import *
 import roman
 
 class ResolutionParsingError(BaseException):

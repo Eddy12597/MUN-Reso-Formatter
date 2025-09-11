@@ -1,5 +1,5 @@
-from preambs import *
-from operationals import *
+from core.preambs import *
+from core.operationals import *
 import document as doc
 
 class Resolution:
