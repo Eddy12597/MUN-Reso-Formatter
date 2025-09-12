@@ -1,6 +1,8 @@
 from core.preambs import *
 from core.operationals import *
 import document as doc
+from colorama import Fore, Back, Style, init
+init() # colorama
 
 class Resolution:
     def __init__(self, 
@@ -19,34 +21,34 @@ class Resolution:
     
     def __str__(self) -> str:
         # Header section
-        header = f"RESOLUTION: {self.topic.upper()}\n"
+        header = f"\n{Style.BRIGHT}{Fore.BLUE}RESOLUTION: {self.topic.upper()}{Style.RESET_ALL}\n"
         header += "=" * 60 + "\n\n"
         
         # Committee and submitters
-        header += f"Committee: {self.committee}\n"
-        header += f"Main Submitter: {self.mainSubmitter}\n"
+        header += f"{Style.BRIGHT}Committee:{Style.RESET_ALL} {self.committee}\n"
+        header += f"{Style.BRIGHT}Main Submitter:{Style.RESET_ALL} {self.mainSubmitter}\n"
         
         if self.coSubmitters:
             co_submitters_str = ", ".join(self.coSubmitters)
-            header += f"Co-Submitters: {co_submitters_str}\n"
+            header += f"{Style.BRIGHT}Co-Submitters:{Style.RESET_ALL} {co_submitters_str}\n"
         
         header += "\n" + "=" * 60 + "\n\n"
         
         # Preambs section
-        preambs_section = "PREAMBULATORY CLAUSES:\n"
+        preambs_section = f"{Style.BRIGHT}{Fore.YELLOW}PREAMBULATORY CLAUSES:\n{Style.RESET_ALL}"
         preambs_section += "-" * 30 + "\n"
         
         for i, preamb in enumerate(self.preambs, 1):
-            preambs_section += f"{i}. {preamb.adverb.upper()} {preamb.content}\n"
+            preambs_section += f"{Style.BRIGHT}{Fore.GREEN}{i}. {preamb.adverb.upper()}{Style.RESET_ALL} {preamb.content}\n"
         
         preambs_section += "\n"
         
         # Operational clauses section
-        clauses_section = "OPERATIONAL CLAUSES:\n"
+        clauses_section = f"{Style.BRIGHT}{Fore.YELLOW}OPERATIONAL CLAUSES:\n{Style.RESET_ALL}"
         clauses_section += "-" * 25 + "\n"
         
         for i, clause in enumerate(self.clauses, 1):
-            clauses_section += f"\n{i}. {clause.verb.upper()} {clause.text}\n"
+            clauses_section += f"\n{Style.BRIGHT}{Fore.RED}{i}. {clause.verb.upper()}{Style.RESET_ALL} {clause.text}\n"
             
             # Subclauses
             for j, subclause in enumerate(clause.listsubclauses, 1):
