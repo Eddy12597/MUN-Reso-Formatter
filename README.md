@@ -1,40 +1,52 @@
 # MUN-Reso-Formatter
+
 Docx-basd Python App for formatting MUN Resolutions. May be integrated into [website](biphmun.netlify.app) as backend.
 
+## Build and run
+
+Currently the project is only around 20~30% finished, but you can test the basic extraction functionality.
+
+```bash
+pip install -r requirements.txt
+cd src
+python main.py
+```
+
 ### TODO:
+
 1. Finish app logic
 2. Fix alignment centering
 3. Develop GUI (with input fields and upload file)
 4. Integrate to website if appropriate
 5. (Far future) allow amendment logic and apply amendments (though probably nobody cares)
 
-
 # Resolution Format:
+
 The resolution should have Times New Roman font family with font size 12 and double spacing.
----
+--------------------------------------------------------------------------------------------
+
 ## Header
 
-<strong>Committee: </strong>Capitalize With Spaces (Initials without '.')
+`<strong>`Committee: `</strong>`Capitalize With Spaces (Initials without '.')
 
-<strong>Main Submitter: </strong>Capitalize With Spaces
+`<strong>`Main Submitter: `</strong>`Capitalize With Spaces
 
-<strong>Co-Submitters: </strong>Country Name, Another Country Name, Capitalize With Space and Commas
+`<strong>`Co-Submitters: `</strong>`Country Name, Another Country Name, Capitalize With Space and Commas
 
-<strong>Topic: </strong> Capitalize With Spaces
-
-
+`<strong>`Topic: `</strong>` Capitalize With Spaces
 
 ---
 
 ## Body
+
 The Committee Name,
 
 ### Preambs
 
-<em>Adverb in italic</em> something,
-<em>Capitalize first word</em> some other stuff,
-<em>Capitalize first word</em> some other stuff,
-<em>Keeping in mind that</em> "The Committee Name" be placed before the preambulatory clauses,
+`<em>`Adverb in italic`</em>` something,
+`<em>`Capitalize first word`</em>` some other stuff,
+`<em>`Capitalize first word`</em>` some other stuff,
+`<em>`Keeping in mind that`</em>` "The Committee Name" be placed before the preambulatory clauses,
 
 ### Operational Clauses
 
@@ -57,4 +69,3 @@ The Committee Name,
   </li>
 </ol>
 ---
-
