@@ -4,33 +4,37 @@ from pathlib import Path
 from core.resolution import *
 import re
 import roman
-import ai_generated
 from typing import Generic, TypeVar, cast, Callable
-import inspect
 import json
+from colorama import Fore, Back, init, Style
+init() # colorama
 
 # ==== CONFIG ====
 
 preamb_config_path = Path("./config/preambs/config.json")
 operationals_config_path = Path("./config/operationals/config.json")
 
-preamb_config: dict[str, list[str] | str] = {}
+preamb_config: dict[str, list[str] | str | dict] = {}
 with preamb_config_path.open("r", encoding="utf-8") as f:
     preamb_config = json.load(f)
 
-operationals_config: dict[str, list[str] | str] = {}
+operationals_config: dict[str, list[str] | str | dict] = {}
 with operationals_config_path.open("r", encoding="utf-8") as f:
     operationals_config = json.load(f)
 
-preamb_phrases = preamb_config.get('preamb_phrases', [])
-operationals_phrases = cast(list[str], operationals_config.get('operationals_phrases', []))
+preamb_phrases = sorted(preamb_config.get('preambs_phrases', []))
+operationals_phrases = sorted(cast(list[str], operationals_config.get('operationals_phrases', [])))
 
-if preamb_phrases is []:
-    print("Warning: no preamb phrases loaded")
-if operationals_phrases is []:
-    print("Warning: no operational phrases loaded")
+if preamb_phrases == []:
+    print(f"{Fore.RED}Warning: no preamb phrases loaded{Style.RESET_ALL}")
+if operationals_phrases == []:
+    print(f"{Fore.RED}Warning: no operational phrases loaded{Style.RESET_ALL}")
+
+print(f"{Fore.GREEN}{len(preamb_phrases)} preamb phrases loaded.{Style.RESET_ALL}")
+print(f"{Fore.GREEN}{len(operationals_phrases)} operational phrases loaded.{Style.RESET_ALL}")
 
 # ====
+
 print("Loading language package. This may take a while.")
 import spacy
 nlp = spacy.load('en_core_web_sm')
@@ -161,7 +165,7 @@ else:
 type _rc_inner_t = str | preamb | clause
 type _rc_t = ResolutionComponent[_rc_inner_t]
 T = TypeVar('T')
-type _mat_func_t[T] = Callable[[str], tuple[T, bool]]
+type _mat_func_t[T] = Callable[[str], tuple[T | None, bool]]
 
 class ResolutionComponent(Generic[T]):
     def __init__(self, startIdx: int = -1, endIdx: int = -1, patterns: list[str] | None = None, currentIdx: int = 0, matchFunc: _mat_func_t[T] | None = None):
@@ -239,102 +243,157 @@ class ResolutionComponent(Generic[T]):
             return [item.strip() for item in first.split(delimiter)] # type: ignore
         return self.getValues()
 
-
 def parseToResolution (doc: doc.document)\
       -> tuple[Resolution, dict[str, _rc_t], list[ResolutionParsingError]]:
-    
+
     paragraphs = doc.get_paragraphs()
 
     components: dict[str, ResolutionComponent[_rc_inner_t]] = {}
     errorList: list[ResolutionParsingError] = []
 
+    # make patterns more permissive (allow colon, dash, or whitespace separators)
     components['committee'] = cast(_rc_t, ResolutionComponent[str](patterns=[
-        r'committee: (.*)',r'comittee: (.*)', r'commitee: (.*)',
-        r'committee:(.*)', r'comittee:(.*)', r'commitee:(.*)',
+        r'committee\s*[:\-\s]\s*(.*)', r'committee[:\-\s]*(.*)',
     ]))
 
     components['mainSubmitter'] = cast(_rc_t, ResolutionComponent[str](patterns=[
-        r'main submitter: (.*)', r'main-submitter: (.*)',
-        r'main submitters: (.*)' r'main-submitters: (.*)',
-        r'main submitter:(.*)', r'main-submitters:(.*)',
-        r'main submitters:(.*)', r'main-submitters:(.*)',
+        r'main[\s\-]*submitter[s]?\s*[:\-\s]\s*(.*)',
+        r'main[\s\-]*submitter[s]?\s*[:\-\s]*(.*)',
     ]))
 
     components['coSubmitters'] = cast(_rc_t, ResolutionComponent[str](patterns=[
-        r'co-submitters: (.*)', r'cosubmitters: (.*)',
-        r'co-submitter: (.*)', r'cosubmitter: (.*)',
-        r'co-submitters:(.*)', r'cosubmitters:(.*)',
-        r'co-submitter:(.*)', r'cosubmitter:(.*)',
+        r'co[\s\-]*submitter[s]?\s*[:\-\s]\s*(.*)', r'co[\s\-]*submitter[s]?\s*[:\-\s]*(.*)',
+        r'cosubmitter[s]?\s*[:\-\s]\s*(.*)', r'cosubmitter[s]?\s*[:\-\s]*(.*)',
     ]))
 
     components['topic'] = cast(_rc_t, ResolutionComponent[str](patterns=[
-        r'topic: (.*)', r'topics: (.*)',
-        r'topic:(.*)', r'topics:(.*)',
+        r'topic[s]?\s*[:\-\s]\s*(.*)', r'topic[s]?\s*[:\-\s]*(.*)',
     ]))
 
     listPreambs: list[preamb] = []
     listOperationals: list[clause] = []
 
+    def sanitize_text(s: str) -> str:
+        """Trim whitespace, collapse duplicate punctuation, strip trailing commas/semicolons/colons and extra spaces."""
+        if s is None:
+            return ""
+        s = s.strip()
+        # replace multiple commas or semicolons with single
+        while ',,' in s:
+            s = s.replace(',,', ',')
+        while ';;' in s:
+            s = s.replace(';;', ';')
+        # remove trailing punctuation that should not remain
+        s = s.rstrip(' ,;:')
+        # collapse multiple spaces
+        s = re.sub(r'\s+', ' ', s)
+        return s
+    
+    def normalize_committee(name: str) -> str:
+        name = re.sub(r'\s*\([^)]*\)', '', name)
+        return name.strip().lower()
 
-    def _preambs_match_function(text: str) -> tuple[preamb, bool]: # TODO: Fix
+    def is_intro_line(text: str, committee_name: str) -> bool:
+        norm_text = re.sub(r'[,\s]+$', '', text.strip()).lower()
+        norm_committee = normalize_committee(committee_name)
+        return norm_text == f"the {norm_committee}"
+
+
+    def _preambs_match_function(text: str) -> tuple[preamb | None, bool]:
         """
         Parse one line of preambular text.
-        
+
         Returns:
         (preamb_obj, True)  -> created a valid preambular clause
         (preamb_obj, False) -> could not match
         """
-        for phrase in preamb_phrases:
-            # Match phrase at start, capture the rest until optional comma/semicolon
-            pattern = rf'^\s*{re.escape(phrase)}\s+(.*?)[,;]?\s*$'
-            result = re.match(pattern, text, re.IGNORECASE)
-            if result:
-                return (preamb(phrase, result.group(1).strip()), True)
+        raw = text.strip()
+        if not raw:
+            return (preamb("__EMPTY__", ""), False)
+        if is_intro_line(raw, cast(str, components['committee'].getValues()[0])):
+            return None, False
+        # If the line appears to be a numbered / lettered / roman operational line,
+        # don't try to treat it as a preamb.
+        if re.match(r'^\s*(\d+[\.\)]|\(?[A-Za-z][\.\)]|\(?[ivxIVX]+\s*[\.\)])', raw):
+            return (preamb("__SKIP__", raw), False)
 
-        # no match found
-        return (preamb("__ERROR__", text.strip()), False)
-    
-        
+        # Try longest phrases first so we don't prematurely match a short phrase that's
+        # a substring of a longer one.
+        for phrase in sorted(set(preamb_phrases), key=len, reverse=True):
+            ph_esc = re.escape(phrase)
+            # match phrase at start (optionally preceded by quotes/parentheses) and capture remainder
+            pattern = rf'^\s*[\(\["\']*\s*{ph_esc}\b(?:\s+(.*?))?\s*[,;]?\s*$'
+            m = re.match(pattern, raw, flags=re.IGNORECASE)
+            if m:
+                remainder = (m.group(1) or "").strip()
+                remainder = sanitize_text(strip_punctuations(remainder))
+                p = preamb(phrase, remainder)
+                listPreambs.append(p)
+                return (p, True)
+
+        # Header-like lines that end with comma/colon and are not numbered -> treat as preamb header
+        if raw.endswith(',') or raw.endswith(':'):
+            head = raw.rstrip(',;:').strip()
+            # ensure it's not a numbered/lettered/roman header
+            if not re.match(r'^\s*(\d+[\.\)]|\(?[A-Za-z][\.\)]|\(?[ivxIVX]+\s*[\.\)])', head):
+                p = preamb(head, "")
+                listPreambs.append(p)
+                return (p, True)
+
+        # No match
+        return (preamb("__ERROR__", raw), False)
+
+    def dedupe_preserve_order(seq):
+        seen = set()
+        out = []
+        for s in seq:
+            if s not in seen:
+                seen.add(s)
+                out.append(s)
+        return out
+
     def _find_first_operational_phrase(text: str, phrases: list[str]) -> tuple[str | None, str, bool]:
         if not phrases:
             return (None, text, False)
         sorted_phrases = sorted(set(phrases), key=lambda s: len(s), reverse=True)
         orig = text
+        # first try to match phrase at start (allow leading punctuation/quotes)
         for ph in sorted_phrases:
             ph_esc = re.escape(ph)
-            # allow optional leading brackets/quotes/punctuation before phrase at start
             pattern_start = rf'^\s*[\(\["\']*\s*({ph_esc})\b'
             m = re.search(pattern_start, orig, flags=re.IGNORECASE)
             if m:
                 start_idx = m.start(1)
                 end_idx = m.end(1)
-                rest = orig[end_idx:].lstrip(" \t\n\r:;,-—–.()[]\"'")  # trim likely punctuation after phrase
+                rest = orig[end_idx:].lstrip(" \t\n\r:;,-—–.()[]\"'")
+                rest = sanitize_text(strip_punctuations(rest))
                 return (orig[start_idx:end_idx], rest, True)
 
-        # If no start matches, search anywhere (first occurrence of any phrase)
+        # If no start matches, search for the first occurrence but ensure it's not part of a
+        # numbered/lettered prefix (so we don't pick up internal words from subclauses accidentally).
         for ph in sorted_phrases:
             ph_esc = re.escape(ph)
             pattern_any = rf'\b({ph_esc})\b'
             m = re.search(pattern_any, orig, flags=re.IGNORECASE)
             if m:
-                start_idx = m.start(1)
-                end_idx = m.end(1)
-                rest = orig[end_idx:].lstrip(" \t\n\r:;,-—–.()[]\"'")
-                return (orig[start_idx:end_idx], rest, False)
-
+                # ensure the match isn't inside a leading clause marker like "1." or "a)"
+                prefix = orig[:m.start(1)]
+                if re.search(r'^\s*$', prefix) or not re.search(r'[\dA-Za-z\)\.]\s*$', prefix):
+                    rest = orig[m.end(1):].lstrip(" \t\n\r:;,-—–.()[]\"'")
+                    rest = sanitize_text(strip_punctuations(rest))
+                    return (orig[m.start(1):m.end(1)], rest, False)
         return (None, text, False)
-
 
     def _operationals_match_function(text: str) -> tuple[clause, bool]:
         # persistent state stored on the function object
         if not hasattr(_operationals_match_function, "state"):
             _operationals_match_function.state = { # type: ignore
-                "clause_counter": 0,
-                "subclause_counter": 0,
-                "subsubclause_counter": 0,
-                "current_clause": None,
-                "current_subclause": None,
-                "current_subsubclause": None,
+                "clause_counter"       : 0,
+                "subclause_counter"    : 0,
+                "subsubclause_counter" : 0,
+                "current_clause"       : None,
+                "current_subclause"    : None,
+                "current_subsubclause" : None,
             }
         st = _operationals_match_function.state # type: ignore
 
@@ -342,14 +401,13 @@ def parseToResolution (doc: doc.document)\
         if not raw:
             return (st["current_clause"] if st["current_clause"] is not None else clause(0, "__EMPTY__", "__EMPTY__"), False)
 
-        # helper to convert roman (lowercase) to int
         def roman_to_int_lower(s: str) -> int | None:
             try:
                 return roman.fromRoman(s.upper())
             except Exception:
                 return None
 
-        # ---- Top-level clause detection: only Arabic numerals ----
+        # Top-level clause detection (Arabic numerals)
         m_clause = re.match(r'^\s*(\d+)\s*[\.\)]\s*(.+)$', raw)
         if m_clause:
             num = m_clause.group(1)
@@ -362,25 +420,25 @@ def parseToResolution (doc: doc.document)\
 
             st["clause_counter"] = max(st["clause_counter"], idx)
 
-            # --- new logic: detect verb phrase using operationals_phrases ---
+            # detect verb phrase using operationals_phrases (if available)
             try:
-                phrases = operationals_phrases  # expect this list to exist globally
+                phrases = operationals_phrases
             except NameError:
                 phrases = []
 
             verb_phrase, rest_of_sentence, at_start = _find_first_operational_phrase(body, phrases)
             if verb_phrase:
-                verb = verb_phrase.strip()
-                clause_text = rest_of_sentence if rest_of_sentence else ""
+                verb = sanitize_text(verb_phrase.strip())
+                clause_text = sanitize_text(rest_of_sentence if rest_of_sentence else "")
             else:
                 verb = "clause verb"
-                clause_text = body
+                clause_text = sanitize_text(body)
 
             new_clause = clause(idx, verb=verb, text=clause_text)
-            st["current_clause"] = new_clause
-            st["current_subclause"] = None
+            st["current_clause"      ] = new_clause
+            st["current_subclause"   ] = None
             st["current_subsubclause"] = None
-            st["subclause_counter"] = 0
+            st["subclause_counter"   ] = 0
             st["subsubclause_counter"] = 0
 
             try:
@@ -390,13 +448,12 @@ def parseToResolution (doc: doc.document)\
 
             return (new_clause, True)
 
-        # ---- Sub-subclause detection: restrict to typical lowercase numerals (i, ii, iii, iv, v, vi, vii, viii, ix, x) ----
-        m_ssc = re.match(r'^\s*\(?([ivx]{1,4})\)?\s*[\.\)]\s*(.+)$', raw)
+        # Sub-subclause detection: roman numerals (i, ii, iii, ...)
+        m_ssc = re.match(r'^\s*\(?([ivxIVX]{1,4})\)?\s*[\.\)]\s*(.+)$', raw)
         if m_ssc:
             roman_str = m_ssc.group(1)
-            body = m_ssc.group(2).strip()
+            body = sanitize_text(m_ssc.group(2).strip())
             roman_idx = roman_to_int_lower(roman_str)
-            # attach to current subclause if present
             if st["current_subclause"] is not None:
                 idx = roman_idx if roman_idx is not None else (st["subsubclause_counter"] + 1)
                 st["subsubclause_counter"] += 1
@@ -404,7 +461,7 @@ def parseToResolution (doc: doc.document)\
                 st["current_subclause"].append(new_ssc)
                 st["current_subsubclause"] = new_ssc
                 return (st["current_clause"], False)
-            # fallback: if no active subclause, create a subclause and attach this as its first sub-subclause
+            # fallback: create a new subclause and attach this as its first sub-subclause
             if st["current_clause"] is not None:
                 st["subclause_counter"] += 1
                 new_sub = subclause(st["subclause_counter"], text=body)
@@ -414,12 +471,11 @@ def parseToResolution (doc: doc.document)\
                 st["subsubclause_counter"] = 0
                 return (st["current_clause"], False)
 
-        # ---- Subclause detection: single letter like "a." or "(a)" ----
+        # Subclause detection: single letter like "a." or "(a)"
         m_sub = re.match(r'^\s*\(?([A-Za-z])\)?\s*[\.\)]\s*(.+)$', raw)
         if m_sub and st["current_clause"] is not None:
             letter = m_sub.group(1).lower()
-            body = m_sub.group(2).strip()
-            # convert letter to index (a->1, b->2, ...)
+            body = sanitize_text(m_sub.group(2).strip())
             if letter.isalpha() and len(letter) == 1:
                 idx = ord(letter) - ord('a') + 1
             else:
@@ -433,36 +489,44 @@ def parseToResolution (doc: doc.document)\
             st["subsubclause_counter"] = 0
             return (st["current_clause"], False)
 
-        # ---- Continuation: append to the most recent item ----
+        # Continuation: append to most recent item
         cont = raw
         if st["current_subsubclause"] is not None:
-            st["current_subsubclause"].text = strip_punctuations(st["current_subsubclause"].text + " " + cont)
+            combined = sanitize_text(strip_punctuations(st["current_subsubclause"].text + " " + cont))
+            st["current_subsubclause"].text = combined
             return (st["current_clause"], False)
         if st["current_subclause"] is not None:
-            st["current_subclause"].text = strip_punctuations(st["current_subclause"].text + " " + cont)
+            combined = sanitize_text(strip_punctuations(st["current_subclause"].text + " " + cont))
+            st["current_subclause"].text = combined
             return (st["current_clause"], False)
         if st["current_clause"] is not None:
-            st["current_clause"].text = strip_punctuations(st["current_clause"].text + " " + cont)
+            combined = sanitize_text(strip_punctuations(st["current_clause"].text + " " + cont))
+            st["current_clause"].text = combined
             return (st["current_clause"], False)
 
-        # nothing matched: return harmless placeholder (don't append)
+        # nothing matched
         return (clause(0, "__ERROR__", raw), False)
 
-    
-    components['preambs'] = cast(_rc_t, ResolutionComponent[preamb]())
+    components['preambs'     ] = cast(_rc_t, ResolutionComponent[preamb]())
     components['operationals'] = cast(_rc_t, ResolutionComponent[clause]())
 
-    components['preambs'].matchFunc = _preambs_match_function
+    components['preambs'     ].matchFunc = _preambs_match_function
     components['operationals'].matchFunc = _operationals_match_function
-    componentsList: list[str] = ['committee', 'mainSubmitter', 'coSubmitters', 'topic', 'preambs', 'operationals']
+    componentsList: list[str] = ['committee',
+                                 'mainSubmitter',
+                                 'coSubmitters',
+                                 'topic',
+                                 'preambs',
+                                 'operationals']
 
-    # Main Loop
+    # ====== Main Loop ======
     for index, line in enumerate(paragraphs):
-        print(f"{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * " "}| {line}")
+        print(f"{Fore.MAGENTA}{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * ' '}{Style.RESET_ALL}| {line}")
         for componentName in componentsList:
+            # pass re.IGNORECASE so regexes are case-insensitive
             components[componentName].extract(line, re.IGNORECASE)
-        
-    
+
+    # finalize values (preambs and operationals built by matchFuncs)
     components['preambs'].setValue(cast(list[_rc_inner_t], listPreambs))
     components['preambs'].markFinished()
     components['operationals'].setValue(cast(list[_rc_inner_t], listOperationals))
@@ -471,7 +535,7 @@ def parseToResolution (doc: doc.document)\
     reso = Resolution(
         cast(str, components['committee'].getFirst()),
         cast(str, components['mainSubmitter'].getFirst()),
-        cast(list[str], components['coSubmitters'].getListValues()),
+        cast(list[str], dedupe_preserve_order(components['coSubmitters'].getListValues() or [])),
         cast(str, components['topic'].getFirst()),
     )
 
@@ -486,33 +550,27 @@ def main():
     """
     Step 1: Read doc and parse to object
     """
-    thedoc = doc.document(str(input_filename), str(output_filename))
-    parseresult = parseToResolution(thedoc) #ai_generated.parseToResolution(thedoc)
-    thereso, components, errorList = parseresult
+    resolutionRawDocument = doc.document(str(input_filename), str(output_filename))
+    parseResult = parseToResolution(resolutionRawDocument)
+    parsedResolution, components, errorList = parseResult
 
-    print(str(thereso))
+    print(str(parsedResolution))
 
     if (len(errorList) != 0):
         print("="*30 + " ERRORS " + "=" * 30)
         for error in errorList:
             print(str(error))
 
-    """
-    Step 2: Format object
-    """
-
-
-
 
     """
-    Step 3: Conflict showing, resolution and confirmation
+    Step 2: Conflict/Error showing, resolution and confirmation
     """
 
 
 
 
     """
-    Step 4: Write to file
+    Step 3: Write to file
     """
 
 if __name__ == "__main__":
