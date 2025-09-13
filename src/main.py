@@ -389,12 +389,12 @@ def parseToResolution (doc: doc.document)\
         # persistent state stored on the function object
         if not hasattr(_operationals_match_function, "state"):
             _operationals_match_function.state = { # type: ignore
-                "clause_counter"       : 0,
-                "subclause_counter"    : 0,
-                "subsubclause_counter" : 0,
-                "current_clause"       : None,
-                "current_subclause"    : None,
-                "current_subsubclause" : None,
+                "clause_counter"        : 0,
+                "subclause_counter"     : 0,
+                "subsubclause_counter"  : 0,
+                "current_clause"        : None,
+                "current_subclause"     : None,
+                "current_subsubclause"  : None,
             }
         st = _operationals_match_function.state # type: ignore
 
@@ -459,15 +459,15 @@ def parseToResolution (doc: doc.document)\
                 idx = roman_idx if roman_idx is not None else (st["subsubclause_counter"] + 1)
                 st["subsubclause_counter"] += 1
                 new_ssc = subsubclause(idx, text=body)
-                st["current_subclause"].append(new_ssc)
+                st["current_subclause"   ].append(new_ssc)
                 st["current_subsubclause"] = new_ssc
                 return (st["current_clause"], False)
             # fallback: create a new subclause and attach this as its first sub-subclause
             if st["current_clause"] is not None:
                 st["subclause_counter"] += 1
                 new_sub = subclause(st["subclause_counter"], text=body)
-                st["current_clause"].listsubclauses.append(new_sub)
-                st["current_subclause"] = new_sub
+                st["current_clause"      ].listsubclauses.append(new_sub)
+                st["current_subclause"   ] = new_sub
                 st["current_subsubclause"] = None
                 st["subsubclause_counter"] = 0
                 return (st["current_clause"], False)
@@ -484,8 +484,8 @@ def parseToResolution (doc: doc.document)\
                 idx = st["subclause_counter"]
 
             new_sub = subclause(idx, text=body)
-            st["current_clause"].listsubclauses.append(new_sub)
-            st["current_subclause"] = new_sub
+            st["current_clause"      ].listsubclauses.append(new_sub)
+            st["current_subclause"   ] = new_sub
             st["current_subsubclause"] = None
             st["subsubclause_counter"] = 0
             return (st["current_clause"], False)
@@ -524,7 +524,6 @@ def parseToResolution (doc: doc.document)\
     for index, line in enumerate(paragraphs):
         print(f"{Fore.MAGENTA}{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * ' '}{Style.RESET_ALL}| {line}")
         for componentName in componentsList:
-            # pass re.IGNORECASE so regexes are case-insensitive
             components[componentName].extract(line, re.IGNORECASE)
 
     # finalize values (preambs and operationals built by matchFuncs)
@@ -536,7 +535,7 @@ def parseToResolution (doc: doc.document)\
     reso = Resolution(
         cast(str, components['committee'].getFirst()),
         cast(str, components['mainSubmitter'].getFirst()),
-        cast(list[str], dedupe_preserve_order(components['coSubmitters'].getListValues() or [])),
+        cast(list[str], dedupe_preserve_order(components['coSubmitters'].getListValues() or ['None'])),
         cast(str, components['topic'].getFirst()),
     )
 
@@ -580,29 +579,36 @@ def writeToFile(resolution, filename: str | Path) -> int:
         preambs.append(temp)
 
     # --- operationals ---
-    # TODO: Fix
-    operationals: list[doc.paragraph] = []
 
-    def render_clause(clause, level: int = 1) -> None:
-        # Clause text
-        par = doc.paragraph(list_level=level)
-        par.add_run(clause.verb.capitalize(), bold=True)
-        if clause.text:
-            par.add_run(" " + clause.text, bold=False)
-        # Add semicolon or period
-        if getattr(clause, "subclauses", None) and clause.subclauses:
-            par.add_run(";", bold=False)
-        else:
-            par.add_run(".", bold=False)
-        operationals.append(par)
+    def render_clause(theclause: clause | subclause | subsubclause, level: int = 1) -> list[doc.paragraph]:
+        paragraphs: list[doc.paragraph] = []
 
-        # Subclauses
-        if getattr(clause, "subclauses", None):
-            for sub in clause.subclauses:
-                render_clause(sub, level + 1)
+        # Clause-level formatting
+        if isinstance(theclause, clause):
+            par = doc.paragraph(list_level=1)
+            par.add_run(theclause.verb.capitalize() + " ", underline=True)
+            par.add_run(theclause.text.rstrip(",.") + ("," if theclause.listsubclauses else "."))
+            paragraphs.append(par)
 
-    for cl in resolution.clauses:
-        render_clause(cl, level=1)
+            # Recurse into subclauses
+            for sub in theclause.listsubclauses:
+                paragraphs.extend(render_clause(sub, 2))
+
+        elif isinstance(theclause, subclause):
+            par = doc.paragraph(list_level=level)
+            par.add_run(theclause.text.rstrip(",.") + ("," if theclause.listsubsubclauses else "."))
+            paragraphs.append(par)
+
+            # Recurse into sub-subclauses
+            for subsub in theclause.listsubsubclauses:
+                paragraphs.extend(render_clause(subsub, 3))
+
+        elif isinstance(theclause, subsubclause):
+            par = doc.paragraph(list_level=level)
+            par.add_run(theclause.text.rstrip(",.") + ".")
+            paragraphs.append(par)
+
+        return paragraphs
 
 
 
@@ -615,8 +621,9 @@ def writeToFile(resolution, filename: str | Path) -> int:
     for pre in preambs:
         outDoc.append(pre)
 
-    for cl in operationals:
-        outDoc.append(cl)
+    for cl in resolution.clauses:
+        for par in render_clause(cl, level=1):
+            outDoc.append(par)
 
     outDoc.save()
     return 0

@@ -101,6 +101,19 @@ class NumberingStyleManager:
         p.paragraph_format.first_line_indent = Inches(-0.31988)
 
         return p
+
+# --- helper: reuse a single NumberingStyleManager per python-docx Document ---
+def _get_numbering_manager(doc: Document) -> NumberingStyleManager: # type: ignore
+    """
+    Ensure the given python-docx Document has one NumberingStyleManager instance.
+    Attaches it as a private attribute on the Document to avoid creating multiple
+    abstractNum/num entries in numbering.xml.
+    """
+    if not hasattr(doc, "_numbering_manager") or getattr(doc, "_numbering_manager") is None:
+        doc._numbering_manager = NumberingStyleManager(doc)
+    return doc._numbering_manager
+
+
 class paragraph:
     def __init__(
         self,
@@ -177,7 +190,9 @@ class paragraph:
         """Render the paragraph to a docx Document."""
         # Handle list paragraphs differently
         if self.list_level > 0:
-            p = NumberingStyleManager(doc).add_numbered_paragraph("", self.list_level)
+            mgr = _get_numbering_manager(doc)
+            p = mgr.add_numbered_paragraph("", self.list_level)
+
             run = p.add_run(self.text)
             self._apply_formatting(run)
         else:
@@ -229,7 +244,9 @@ class paragraph:
         """Render the paragraph to a docx Document."""
         # Handle list paragraphs differently
         if self.list_level > 0:
-            p = NumberingStyleManager(doc).add_numbered_paragraph("", self.list_level)
+            mgr = _get_numbering_manager(doc)
+            p = mgr.add_numbered_paragraph("", self.list_level)
+
             
             # Add all runs to the numbered paragraph
             if self._runs:
@@ -295,7 +312,9 @@ class paragraph:
         """Render the paragraph to a docx Document."""
         # Handle list paragraphs differently
         if self.list_level > 0:
-            p = NumberingStyleManager(doc).add_numbered_paragraph("", self.list_level)
+            mgr = _get_numbering_manager(doc)
+            p = mgr.add_numbered_paragraph("", self.list_level)
+
             
             # Add all runs to the numbered paragraph
             if self._runs:
