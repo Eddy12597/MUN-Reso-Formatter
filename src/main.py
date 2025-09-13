@@ -7,7 +7,10 @@ import roman
 from typing import Generic, TypeVar, cast, Callable
 import json
 from colorama import Fore, Back, init, Style
+import argparse
 init() # colorama
+
+verbose: bool = False
 
 # ==== CONFIG ====
 
@@ -30,12 +33,12 @@ if preamb_phrases == []:
 if operationals_phrases == []:
     print(f"{Fore.RED}Warning: no operational phrases loaded{Style.RESET_ALL}")
 
-print(f"{Fore.GREEN}{len(preamb_phrases)} preamb phrases loaded.{Style.RESET_ALL}")
-print(f"{Fore.GREEN}{len(operationals_phrases)} operational phrases loaded.{Style.RESET_ALL}")
+if verbose: print(f"{Fore.GREEN}{len(preamb_phrases)} preamb phrases loaded.{Style.RESET_ALL}")
+if verbose: print(f"{Fore.GREEN}{len(operationals_phrases)} operational phrases loaded.{Style.RESET_ALL}")
 
 # ====
 
-print("Loading language package. This may take a while.")
+# print("Loading language package. This may take a while.")
 # import spacy
 # nlp = spacy.load('en_core_web_sm')
 
@@ -150,17 +153,17 @@ def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
 
 # alter this to gui input later
 
-input_filename = input("Enter input filename, ENTER to test: ")
-if input_filename == '':
-    input_filename = Path("../tests/inputs/test_reso.docx")
-else:
-    input_filename = Path(input_filename)
+# input_filename = input("Enter input filename, ENTER to test: ")
+# if input_filename == '':
+#     input_filename = Path("../tests/inputs/test_reso.docx")
+# else:
+#     input_filename = Path(input_filename)
 
-output_filename = input("Enter output filename, ENTER to test: ")
-if output_filename == '':
-    output_filename = Path("../tests/outputs/test_reso.docx")
-else:
-    output_filename = Path(output_filename)
+# output_filename = input("Enter output filename, ENTER to test: ")
+# if output_filename == '':
+#     output_filename = Path("../tests/outputs/test_reso.docx")
+# else:
+#     output_filename = Path(output_filename)
 
 # === TYPES to silence the type checker ===
 type _rc_inner_t = str | preamb | clause
@@ -386,6 +389,8 @@ def parseToResolution (doc: doc.document)\
         return (None, text, False)
 
     def _operationals_match_function(text: str) -> tuple[clause, bool]:
+        global verbose
+
         # persistent state stored on the function object
         if not hasattr(_operationals_match_function, "state"):
             _operationals_match_function.state = { # type: ignore
@@ -522,7 +527,7 @@ def parseToResolution (doc: doc.document)\
 
     # ====== Main Loop ======
     for index, line in enumerate(paragraphs):
-        print(f"{Fore.MAGENTA}{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * ' '}{Style.RESET_ALL}| {line}")
+        if verbose: print(f"{Fore.MAGENTA}{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * ' '}{Style.RESET_ALL}| {line}")
         for componentName in componentsList:
             components[componentName].extract(line, re.IGNORECASE)
 
@@ -574,8 +579,8 @@ def writeToFile(resolution, filename: str | Path) -> int:
     preambs: list[doc.paragraph] = []
     for pre in resolution.preambs:
         temp = doc.paragraph()
-        temp.add_run(pre.adverb.capitalize(), underline=True)
-        temp.add_run(" " + pre.content + ",", underline=False)
+        temp.add_run(pre.adverb.capitalize(), italic=True)
+        temp.add_run(" " + pre.content + ",", italic=False)
         preambs.append(temp)
 
     # --- operationals ---
@@ -625,11 +630,42 @@ def writeToFile(resolution, filename: str | Path) -> int:
         for par in render_clause(cl, level=1):
             outDoc.append(par)
 
-    outDoc.save()
+    outDoc.save(verbose=verbose)
     return 0
 
 
 def main():
+    global verbose
+    # Set default filenames
+    input_filename: str | Path = Path("../tests/inputs/test_reso.docx")
+    output_filename: str | Path = Path("../tests/outputs/test_reso.docx")
+
+    parser = argparse.ArgumentParser(
+                    prog='',
+                    description='Formats a resolution (.docx) and outputs file.')
+    parser.add_argument('filename', nargs='?', help='input filename (optional)')  # Changed to optional
+    parser.add_argument('-v', '--verbose', help='enable verbose mode', action='store_true')
+    parser.add_argument('-o', '--output', help='output filename')
+    args = parser.parse_args()
+
+    if args.verbose:
+        verbose = True
+    
+    # Use the positional filename argument if provided
+    if args.filename:
+        if verbose:
+            print(f"Input filename: {args.filename}")
+        input_filename = Path(args.filename)
+    
+    if args.output:
+        if verbose:
+            print(f"Output filename: {args.output}")
+        output_filename = Path(args.output)
+
+    if verbose:
+        print(f"Using input: {input_filename}")
+        print(f"Using output: {output_filename}")
+    
     
 
     """
@@ -639,7 +675,7 @@ def main():
     parseResult = parseToResolution(resolutionRawDocument)
     parsedResolution, components, errorList = parseResult
 
-    print(str(parsedResolution))
+    if verbose: print(str(parsedResolution))
 
     if (len(errorList) != 0):
         print("="*30 + " ERRORS " + "=" * 30)

@@ -477,11 +477,11 @@ class document:
     
     def remove(self, paragraph: paragraph) -> None:
         self.paragraphs.remove(paragraph)
-    def save(self, outputfile : str | None = None) -> None:
+    def save(self, outputfile : str | None = None, verbose: bool = False) -> None:
         if outputfile is None:
             outputfile = self.outputfile
         self._doc.save(outputfile)
-        print(f"File saved to {outputfile}")
+        if verbose: print(f"File saved to {outputfile}")
     def getdocument(self) -> 'Document': # type: ignore
         return self._doc
 
