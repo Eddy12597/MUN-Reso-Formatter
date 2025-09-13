@@ -162,7 +162,7 @@ class paragraph:
 
     def add_run(self, text: str, **kwargs) -> None:
         """Add a formatted text run.
-        kwargs choices: bold, italic, underline, font_size
+        kwargs choices: bold, italic, underline, font_size, font_color
         """
         self._runs.append({
             "text": text,
@@ -170,9 +170,10 @@ class paragraph:
             "italic": kwargs.get("italic", False),
             "underline": kwargs.get("underline", False),
             "font_size": kwargs.get("font_size", self.font_size),
+            "font_color": kwargs.get("font_color", None),  # Add font_color to the run spec
         })
 
-    def render(self, doc: Document) -> None: # type: ignore
+    def __render(self, doc: Document) -> None: # type: ignore
         """Render the paragraph to a docx Document."""
         # Handle list paragraphs differently
         if self.list_level > 0:
@@ -224,6 +225,145 @@ class paragraph:
         # line spacing
         p.paragraph_format.line_spacing = self.line_spacing if self.line_spacing is not None else doc.styles['Normal'].paragraph_format.line_spacing # potential bug here if overall style is not 'Normal', but considering our specific use case it can be tolerated (plus nobody formats their entire document in a style other than Normal anyway)
 
+    def _render(self, doc: Document) -> None: # type: ignore
+        """Render the paragraph to a docx Document."""
+        # Handle list paragraphs differently
+        if self.list_level > 0:
+            p = NumberingStyleManager(doc).add_numbered_paragraph("", self.list_level)
+            
+            # Add all runs to the numbered paragraph
+            if self._runs:
+                for run_spec in self._runs:
+                    run = p.add_run(run_spec["text"])
+                    run.bold = run_spec["bold"]
+                    run.italic = run_spec["italic"]
+                    run.underline = run_spec["underline"]
+                    if run_spec["font_size"]:
+                        run.font.size = Pt(run_spec["font_size"])
+                    if run_spec["font_color"]:
+                        run.font.color.rgb = RGBColor(*run_spec["font_color"])
+            else:
+                # Add simple text with formatting
+                run = p.add_run(self.text)
+                self._apply_formatting(run)
+        else:
+            # Regular paragraph handling
+            p = doc.add_paragraph(style=self.style)
+            
+            # If we have runs, add them with formatting
+            if self._runs:
+                for run_spec in self._runs:
+                    run = p.add_run(run_spec["text"])
+                    run.bold = run_spec["bold"]
+                    run.italic = run_spec["italic"]
+                    run.underline = run_spec["underline"]
+                    if run_spec["font_size"]:
+                        run.font.size = Pt(run_spec["font_size"])
+                    if run_spec["font_color"]:
+                        run.font.color.rgb = RGBColor(*run_spec["font_color"])
+            else:
+                # Add simple text with formatting
+                run = p.add_run(self.text)
+                self._apply_formatting(run)
+
+        # Apply paragraph formatting (alignment, indents, etc.)
+        if self.align is not None:
+            p.alignment = self.align
+
+        if self.first_line_indent is not None:
+            if isinstance(self.first_line_indent, (int, float)):
+                p.paragraph_format.first_line_indent = Inches(self.first_line_indent)
+            else:
+                p.paragraph_format.first_line_indent = self.first_line_indent
+                
+        if self.left_indent is not None:
+            if isinstance(self.left_indent, (int, float)):
+                p.paragraph_format.left_indent = Inches(self.left_indent)
+            else:
+                p.paragraph_format.left_indent = self.left_indent
+                
+        if self.right_indent is not None:
+            if isinstance(self.right_indent, (int, float)):
+                p.paragraph_format.right_indent = Inches(self.right_indent)
+            else:
+                p.paragraph_format.right_indent = self.right_indent
+        
+        # line spacing
+        p.paragraph_format.line_spacing = self.line_spacing if self.line_spacing is not None else doc.styles['Normal'].paragraph_format.line_spacing
+
+    def render(self, doc: Document) -> None: # type: ignore
+        """Render the paragraph to a docx Document."""
+        # Handle list paragraphs differently
+        if self.list_level > 0:
+            p = NumberingStyleManager(doc).add_numbered_paragraph("", self.list_level)
+            
+            # Add all runs to the numbered paragraph
+            if self._runs:
+                for run_spec in self._runs:
+                    run = p.add_run(run_spec["text"])
+                    run.bold = run_spec["bold"]
+                    run.italic = run_spec["italic"]
+                    run.underline = run_spec["underline"]
+                    if run_spec["font_size"]:
+                        run.font.size = Pt(run_spec["font_size"])
+                    # Handle font color - check if it exists in run spec first
+                    font_color = run_spec.get("font_color")
+                    if font_color:
+                        run.font.color.rgb = RGBColor(*font_color)
+                    elif self.font_color:
+                        run.font.color.rgb = RGBColor(*self.font_color)
+            else:
+                # Add simple text with formatting
+                run = p.add_run(self.text)
+                self._apply_formatting(run)
+        else:
+            # Regular paragraph handling
+            p = doc.add_paragraph(style=self.style)
+            
+            # If we have runs, add them with formatting
+            if self._runs:
+                for run_spec in self._runs:
+                    run = p.add_run(run_spec["text"])
+                    run.bold = run_spec["bold"]
+                    run.italic = run_spec["italic"]
+                    run.underline = run_spec["underline"]
+                    if run_spec["font_size"]:
+                        run.font.size = Pt(run_spec["font_size"])
+                    # Handle font color - check if it exists in run spec first
+                    font_color = run_spec.get("font_color")
+                    if font_color:
+                        run.font.color.rgb = RGBColor(*font_color)
+                    elif self.font_color:
+                        run.font.color.rgb = RGBColor(*self.font_color)
+            else:
+                # Add simple text with formatting
+                run = p.add_run(self.text)
+                self._apply_formatting(run)
+
+        # Apply paragraph formatting (alignment, indents, etc.)
+        if self.align is not None:
+            p.alignment = self.align
+
+        if self.first_line_indent is not None:
+            if isinstance(self.first_line_indent, (int, float)):
+                p.paragraph_format.first_line_indent = Inches(self.first_line_indent)
+            else:
+                p.paragraph_format.first_line_indent = self.first_line_indent
+                
+        if self.left_indent is not None:
+            if isinstance(self.left_indent, (int, float)):
+                p.paragraph_format.left_indent = Inches(self.left_indent)
+            else:
+                p.paragraph_format.left_indent = self.left_indent
+                
+        if self.right_indent is not None:
+            if isinstance(self.right_indent, (int, float)):
+                p.paragraph_format.right_indent = Inches(self.right_indent)
+            else:
+                p.paragraph_format.right_indent = self.right_indent
+        
+        # line spacing
+        p.paragraph_format.line_spacing = self.line_spacing if self.line_spacing is not None else doc.styles['Normal'].paragraph_format.line_spacing
 
     def _apply_formatting(self, run) -> None:
         """Helper to apply formatting to a run."""
@@ -260,10 +400,10 @@ class paragraph:
         return self.text
     
     
-
+# inputfile=None for write-only (needs testing)
 class document:
     def __init__(self, 
-                 inputfile: str ="tests/inputs/test1.docx",
+                 inputfile: str | None ="tests/inputs/test1.docx",
                  outputfile : str ="tests/outputs/test1.docx",
                  paragraphs: list[paragraph] | None = None,
                  overallstyle : str = "Normal",
@@ -273,7 +413,7 @@ class document:
         self.paragraphs = paragraphs if paragraphs is not None else []
         self.inputfile = inputfile
         self.outputfile = outputfile
-        self._doc = Document(inputfile)
+        self._doc = Document(inputfile) if inputfile is not None else Document()
         self._doc.styles[overallstyle].font.name = font # type: ignore
         self._doc.styles[overallstyle].font.size = Pt(fontsize) # type: ignore
         self._doc.styles[overallstyle].paragraph_format.line_spacing = line_spacing # type: ignore

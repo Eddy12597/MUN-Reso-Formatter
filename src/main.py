@@ -36,8 +36,8 @@ print(f"{Fore.GREEN}{len(operationals_phrases)} operational phrases loaded.{Styl
 # ====
 
 print("Loading language package. This may take a while.")
-import spacy
-nlp = spacy.load('en_core_web_sm')
+# import spacy
+# nlp = spacy.load('en_core_web_sm')
 
 class ResolutionParsingError(BaseException):
     def __init__(self, msg: str, line: int):
@@ -54,6 +54,7 @@ def strip_punctuations(text: str) -> str:
         text = text.replace(f" {punc}", f"{punc}")
     return text
 
+"""
 def extract_first_participial_phrase(text: str) -> tuple[str | None, str]:
     doc = nlp(text)
     
@@ -95,7 +96,7 @@ def extract_first_participial_phrase(text: str) -> tuple[str | None, str]:
 
 # Doesn't work for 'be' verbs and 'will' aux verbs
 def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
-    """
+    \"""
     Extracts first verb from a sentence. Includes a preposition after the verb if there is any (used for the clause verb extraction). Returns the verb and the preposition, the rest of the sentence, and whether it occurs at the beginning of the sentence.
     Params:
     ------------
@@ -112,7 +113,7 @@ def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
 
         3. The third element (bool):
             whether the verb occurs at the beginning of the sentence. If it does not, or if the text is empty, or if the text contains no verb, returns False
-    """
+    \"""
     if not text or text.isspace():
         return None, None, False
 
@@ -145,19 +146,19 @@ def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
     rest_of_sentence = ' '.join([t.text for t in doc if not t.is_space]).strip()
     rest_of_sentence = strip_punctuations(rest_of_sentence)
     return None, rest_of_sentence, False
-
+"""
 
 # alter this to gui input later
 
 input_filename = input("Enter input filename, ENTER to test: ")
 if input_filename == '':
-    input_filename = Path("../tests/inputs/test1.docx")
+    input_filename = Path("../tests/inputs/test_reso.docx")
 else:
     input_filename = Path(input_filename)
 
 output_filename = input("Enter output filename, ENTER to test: ")
 if output_filename == '':
-    output_filename = Path("../tests/outputs/test1.docx")
+    output_filename = Path("../tests/outputs/test_reso.docx")
 else:
     output_filename = Path(output_filename)
 
@@ -544,6 +545,83 @@ def parseToResolution (doc: doc.document)\
 
     return (reso, components, errorList)
 
+def writeToFile(resolution, filename: str | Path) -> int:
+    outDoc = doc.document(None, str(filename), line_spacing=2)
+
+    topicPar = doc.paragraph(bold=True)
+    topicPar.add_run("Topic: ", bold=True)
+    topicPar.add_run(resolution.topic, bold=False)
+
+    committeePar = doc.paragraph(bold=True)
+    committeePar.add_run("Committee: ", bold=True)
+    committeePar.add_run(resolution.committee, bold=False)
+
+    mainSubmitterPar = doc.paragraph(bold=True)
+    mainSubmitterPar.add_run("Main Submitter: ", bold=True)
+    mainSubmitterPar.add_run(resolution.mainSubmitter, bold=False)
+
+    coSubmittersPar = doc.paragraph(bold=True)
+    coSubmittersPar.add_run("Co-Submitters: ", bold=True)
+    coSubmittersPar.add_run(", ".join(resolution.coSubmitters), bold=False)
+
+    committeeSubjectPar = doc.paragraph(
+        f"The {' '.join(
+            word.capitalize() for word in resolution.committee.split(' ')[:-1]
+        )},",
+        bold=False
+    )
+
+    # --- preambs ---
+    preambs: list[doc.paragraph] = []
+    for pre in resolution.preambs:
+        temp = doc.paragraph()
+        temp.add_run(pre.adverb.capitalize(), underline=True)
+        temp.add_run(" " + pre.content + ",", underline=False)
+        preambs.append(temp)
+
+    # --- operationals ---
+    # TODO: Fix
+    operationals: list[doc.paragraph] = []
+
+    def render_clause(clause, level: int = 1) -> None:
+        # Clause text
+        par = doc.paragraph(list_level=level)
+        par.add_run(clause.verb.capitalize(), bold=True)
+        if clause.text:
+            par.add_run(" " + clause.text, bold=False)
+        # Add semicolon or period
+        if getattr(clause, "subclauses", None) and clause.subclauses:
+            par.add_run(";", bold=False)
+        else:
+            par.add_run(".", bold=False)
+        operationals.append(par)
+
+        # Subclauses
+        if getattr(clause, "subclauses", None):
+            for sub in clause.subclauses:
+                render_clause(sub, level + 1)
+
+    for cl in resolution.clauses:
+        render_clause(cl, level=1)
+
+
+
+    for par in [
+        topicPar, committeePar, mainSubmitterPar,
+        coSubmittersPar, committeeSubjectPar
+    ]:
+        outDoc.append(par)
+
+    for pre in preambs:
+        outDoc.append(pre)
+
+    for cl in operationals:
+        outDoc.append(cl)
+
+    outDoc.save()
+    return 0
+
+
 def main():
     
 
@@ -572,6 +650,8 @@ def main():
     """
     Step 3: Write to file
     """
+
+    writeToFile(parsedResolution, output_filename)
 
 if __name__ == "__main__":
     main()
