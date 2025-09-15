@@ -4,12 +4,29 @@ Docx-basd Python App for formatting MUN Resolutions. May be integrated into [web
 
 ## Build and run
 
-Currently the project is only around 20~30% finished, but you can test the basic extraction functionality.
+Currently the project is only around 30~50% finished, but you can test the basic extraction functionality.
 
 ```bash
 pip install -r requirements.txt
 cd src
 python main.py
+```
+
+## Help
+
+```bash
+/path/to/MUN-Reso-Formatter/src$ python main.py --help
+usage: [-h] [-v] [-o OUTPUT] [filename]
+
+Formats a resolution (.docx) and outputs file.
+
+positional arguments:
+  filename             input filename (optional)
+
+options:
+  -h, --help           show this help message and exit
+  -v, --verbose        enable verbose mode
+  -o, --output OUTPUT  output filename
 ```
 
 ### TODO:
