@@ -44,13 +44,13 @@ The resolution should have Times New Roman font family with font size 12 and dou
 
 ## Header
 
-`<strong>`Committee: `</strong>`Capitalize With Spaces (Initials without '.')
+<strong>Committee: </strong>Capitalize With Spaces (Initials without '.')
 
-`<strong>`Main Submitter: `</strong>`Capitalize With Spaces
+<strong>Main Submitter: </strong>Capitalize With Spaces
 
-`<strong>`Co-Submitters: `</strong>`Country Name, Another Country Name, Capitalize With Space and Commas
+<strong>Co-Submitters: </strong>Country Name, Another Country Name, Capitalize With Space and Commas
 
-`<strong>`Topic: `</strong>` Capitalize With Spaces
+<strong>Topic: </strong> Capitalize With Spaces
 
 ---
 
@@ -60,10 +60,13 @@ The Committee Name,
 
 ### Preambs
 
-`<em>`Adverb in italic`</em>` something,
-`<em>`Capitalize first word`</em>` some other stuff,
-`<em>`Capitalize first word`</em>` some other stuff,
-`<em>`Keeping in mind that`</em>` "The Committee Name" be placed before the preambulatory clauses,
+<em>Adverb in italic</em> something,
+
+<em>Capitalize first word</em> some other stuff,
+
+<em>Capitalize first word</em> some other stuff,
+
+<em>Keeping in mind that</em> "The Committee Name" be placed before the preambulatory clauses,
 
 ### Operational Clauses
 
