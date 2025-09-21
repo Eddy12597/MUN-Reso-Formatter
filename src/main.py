@@ -27,15 +27,18 @@ with operationals_config_path.open("r", encoding="utf-8") as f:
 
 preamb_phrases = sorted(preamb_config.get('preambs_phrases', []))
 operationals_phrases = sorted(cast(list[str], operationals_config.get('operationals_phrases', [])))
+list_phrases = sorted(operationals_config.get("list_phrases", []))
 
 if preamb_phrases == []:
     print(f"{Fore.RED}Warning: no preamb phrases loaded{Style.RESET_ALL}")
 if operationals_phrases == []:
     print(f"{Fore.RED}Warning: no operational phrases loaded{Style.RESET_ALL}")
+if list_phrases == []:
+    print(f"{Fore.RED}Warning: no list phrases loaded{Style.RESET_ALL}")
 
 if verbose: print(f"{Fore.GREEN}{len(preamb_phrases)} preamb phrases loaded.{Style.RESET_ALL}")
 if verbose: print(f"{Fore.GREEN}{len(operationals_phrases)} operational phrases loaded.{Style.RESET_ALL}")
-
+if verbose: print(f"{Fore.GREEN}{len(list_phrases)} list phrases loaded.{Style.RESET_ALL}")
 # ====
 
 # print("Loading language package. This may take a while.")
@@ -151,20 +154,6 @@ def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
     return None, rest_of_sentence, False
 """
 
-# alter this to gui input later
-
-# input_filename = input("Enter input filename, ENTER to test: ")
-# if input_filename == '':
-#     input_filename = Path("../tests/inputs/test_reso.docx")
-# else:
-#     input_filename = Path(input_filename)
-
-# output_filename = input("Enter output filename, ENTER to test: ")
-# if output_filename == '':
-#     output_filename = Path("../tests/outputs/test_reso.docx")
-# else:
-#     output_filename = Path(output_filename)
-
 # === TYPES to silence the type checker ===
 type _rc_inner_t = str | preamb | clause
 type _rc_t = ResolutionComponent[_rc_inner_t]
@@ -249,7 +238,7 @@ class ResolutionComponent(Generic[T]):
 
 def parseToResolution (doc: doc.document)\
       -> tuple[Resolution, dict[str, _rc_t], list[ResolutionParsingError]]:
-
+    # TODO: implement security council formatting
     paragraphs = doc.get_paragraphs()
 
     components: dict[str, ResolutionComponent[_rc_inner_t]] = {}
@@ -532,8 +521,9 @@ def parseToResolution (doc: doc.document)\
             components[componentName].extract(line, re.IGNORECASE)
 
     # finalize values (preambs and operationals built by matchFuncs)
-    components['preambs'].setValue(cast(list[_rc_inner_t], listPreambs))
-    components['preambs'].markFinished()
+    components['preambs'     ].setValue(cast(list[_rc_inner_t], listPreambs))
+    components['preambs'     ].markFinished()
+
     components['operationals'].setValue(cast(list[_rc_inner_t], listOperationals))
     components['operationals'].markFinished()
 
@@ -585,37 +575,39 @@ def writeToFile(resolution, filename: str | Path) -> int:
 
     # --- operationals ---
 
-    def render_clause(theclause: clause | subclause | subsubclause, level: int = 1) -> list[doc.paragraph]:
+    def render_clause(theclause: clause | subclause | subsubclause, level: int = 1, is_last: bool = False) -> list[doc.paragraph]:
         paragraphs: list[doc.paragraph] = []
 
         # Clause-level formatting
         if isinstance(theclause, clause):
             par = doc.paragraph(list_level=1)
             par.add_run(theclause.verb.capitalize() + " ", underline=True)
-            par.add_run(theclause.text.rstrip(",.") + ("," if theclause.listsubclauses else "."))
+            par.add_run(theclause.text.rstrip(",.").rstrip(":") + (":" if any(theclause.text.endswith(ph + ",") for ph in list_phrases) else "," if not is_last else ".")) # if theclause.listsubclauses else "."
             paragraphs.append(par)
 
             # Recurse into subclauses
-            for sub in theclause.listsubclauses:
-                paragraphs.extend(render_clause(sub, 2))
+            for i, sub in enumerate(theclause.listsubclauses):
+                # Check if this is the last subclause of the last clause
+                sub_is_last = is_last and (i == len(theclause.listsubclauses) - 1)
+                paragraphs.extend(render_clause(sub, 2, sub_is_last))
 
         elif isinstance(theclause, subclause):
             par = doc.paragraph(list_level=level)
-            par.add_run(theclause.text.rstrip(",.") + ("," if theclause.listsubsubclauses else "."))
+            par.add_run(theclause.text.rstrip(",.").rstrip(":") + (":" if any(theclause.text.endswith(ph + ",") for ph in list_phrases) else "," if not is_last else ".")) # if theclause.listsubsubclauses else "."
             paragraphs.append(par)
 
             # Recurse into sub-subclauses
-            for subsub in theclause.listsubsubclauses:
-                paragraphs.extend(render_clause(subsub, 3))
+            for i, subsub in enumerate(theclause.listsubsubclauses):
+                # Check if this is the last subsubclause of the last subclause
+                subsub_is_last = is_last and (i == len(theclause.listsubsubclauses) - 1)
+                paragraphs.extend(render_clause(subsub, 3, subsub_is_last))
 
         elif isinstance(theclause, subsubclause):
             par = doc.paragraph(list_level=level)
-            par.add_run(theclause.text.rstrip(",.") + ".")
+            par.add_run(theclause.text.rstrip(",.").rstrip(":") + ("," if not is_last else "."))
             paragraphs.append(par)
-
+        
         return paragraphs
-
-
 
     for par in [
         topicPar, committeePar, mainSubmitterPar,
@@ -626,8 +618,11 @@ def writeToFile(resolution, filename: str | Path) -> int:
     for pre in preambs:
         outDoc.append(pre)
 
-    for cl in resolution.clauses:
-        for par in render_clause(cl, level=1):
+    # Render all clauses, passing is_last=True to the last clause
+    for i, cl in enumerate(resolution.clauses):
+        is_last_clause = (i == len(resolution.clauses) - 1)
+        pars = render_clause(cl, level=1, is_last=is_last_clause)
+        for par in pars:
             outDoc.append(par)
 
     outDoc.save(verbose=verbose)

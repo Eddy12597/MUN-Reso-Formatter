@@ -75,5 +75,16 @@
         "underscores",
         "urges",
         "welcomes"
+    ],
+    "__comment": "list of phrases that signal a list in sub-items",
+    "list_phrases": [
+        "through",
+        "including",
+        "including but not limited to",
+        "such as",
+        "like",
+        "the following",
+        "to",
+        "by"
     ]
 }
