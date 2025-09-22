@@ -575,39 +575,85 @@ def writeToFile(resolution, filename: str | Path) -> int:
 
     # --- operationals ---
 
-    def render_clause(theclause: clause | subclause | subsubclause, level: int = 1, is_last: bool = False) -> list[doc.paragraph]:
+   
+    def _ends_with_list_phrase(text: str) -> bool:
+        # Return True if text ends with any phrase in list_phrases (robust to trailing punctuation/whitespace)
+        if not text:
+            return False
+        for ph in list_phrases:
+            # match phrase at the end, allow optional trailing spaces and punctuation
+            pattern = rf'(?i)\b{re.escape(ph)}[ \t\r\n]*[,:;.\-–—]*$'
+            if re.search(pattern, text):
+                return True
+        return False
+
+    def render_clause(theclause: clause | subclause | subsubclause,
+                      level: int = 1,
+                      is_last: bool = False,
+                      last_within_top_clause: bool = False) -> list[doc.paragraph]:
+        """
+        is_last: absolute last in the whole resolution (-> period).
+        last_within_top_clause: this element is the last item inside its top-level clause
+            (used to decide whether to use semicolon for leaf items).
+        """
         paragraphs: list[doc.paragraph] = []
+
+        def choose_end(text: str, is_last: bool, last_within_top_clause: bool, has_children: bool = False) -> str:
+            base = text.rstrip(",.").rstrip(":").rstrip(";")
+            # 1) if it has children or ends with a list phrase -> colon (overrides absolute last)
+            if has_children or _ends_with_list_phrase(text):
+                return base + ":"
+            # 2) absolute last leaf -> period
+            if is_last:
+                return base + "."
+            # 3) last leaf within top clause -> semicolon
+            if last_within_top_clause:
+                return base + ";"
+            # 4) otherwise comma
+            return base + ","
+
 
         # Clause-level formatting
         if isinstance(theclause, clause):
             par = doc.paragraph(list_level=1)
             par.add_run(theclause.verb.capitalize() + " ", underline=True)
-            par.add_run(theclause.text.rstrip(",.").rstrip(":") + (":" if any(theclause.text.endswith(ph + ",") for ph in list_phrases) else "," if not is_last else ".")) # if theclause.listsubclauses else "."
+            has_children = bool(getattr(theclause, "listsubclauses", []))
+            par.add_run(choose_end(theclause.text, is_last, False, has_children))
             paragraphs.append(par)
 
             # Recurse into subclauses
             for i, sub in enumerate(theclause.listsubclauses):
-                # Check if this is the last subclause of the last clause
-                sub_is_last = is_last and (i == len(theclause.listsubclauses) - 1)
-                paragraphs.extend(render_clause(sub, 2, sub_is_last))
+                # whether this subclause is the last subclause of this clause
+                sub_is_last_in_clause = (i == len(theclause.listsubclauses) - 1)
+                # absolute last for this sub = absolute last for parent clause AND this is its last sub
+                sub_is_absolute_last = is_last and sub_is_last_in_clause
+                # last_within_top_clause for the sub = whether it's the last subclause inside the top clause
+                paragraphs.extend(render_clause(sub, 2, sub_is_absolute_last, sub_is_last_in_clause))
 
         elif isinstance(theclause, subclause):
+            has_children = bool(getattr(theclause, "listsubsubclauses", []))
             par = doc.paragraph(list_level=level)
-            par.add_run(theclause.text.rstrip(",.").rstrip(":") + (":" if any(theclause.text.endswith(ph + ",") for ph in list_phrases) else "," if not is_last else ".")) # if theclause.listsubsubclauses else "."
+            par.add_run(choose_end(theclause.text, is_last, last_within_top_clause, has_children))
             paragraphs.append(par)
 
             # Recurse into sub-subclauses
             for i, subsub in enumerate(theclause.listsubsubclauses):
-                # Check if this is the last subsubclause of the last subclause
-                subsub_is_last = is_last and (i == len(theclause.listsubsubclauses) - 1)
-                paragraphs.extend(render_clause(subsub, 3, subsub_is_last))
+                subsub_is_last_in_sub = (i == len(theclause.listsubsubclauses) - 1)
+                # absolute last for this subsub = absolute last passed down AND it's the last subsub
+                subsub_is_absolute_last = is_last and subsub_is_last_in_sub
+                # last_within_top_clause for subsub: it is last within top clause only if:
+                #   (a) parent subclause was last_within_top_clause (i.e. parent was last subclause of clause)
+                #   AND (b) this subsub is the last in its parent subclause
+                subsub_last_within_top_clause = last_within_top_clause and subsub_is_last_in_sub
+                paragraphs.extend(render_clause(subsub, 3, subsub_is_absolute_last, subsub_last_within_top_clause))
 
         elif isinstance(theclause, subsubclause):
             par = doc.paragraph(list_level=level)
-            par.add_run(theclause.text.rstrip(",.").rstrip(":") + ("," if not is_last else "."))
+            par.add_run(choose_end(theclause.text, is_last, last_within_top_clause))
             paragraphs.append(par)
-        
+
         return paragraphs
+
 
     for par in [
         topicPar, committeePar, mainSubmitterPar,
@@ -621,7 +667,8 @@ def writeToFile(resolution, filename: str | Path) -> int:
     # Render all clauses, passing is_last=True to the last clause
     for i, cl in enumerate(resolution.clauses):
         is_last_clause = (i == len(resolution.clauses) - 1)
-        pars = render_clause(cl, level=1, is_last=is_last_clause)
+        # For top-level clauses, last_within_top_clause is the same as is_last_clause
+        pars = render_clause(cl, level=1, is_last=is_last_clause, last_within_top_clause=is_last_clause)
         for par in pars:
             outDoc.append(par)
 
