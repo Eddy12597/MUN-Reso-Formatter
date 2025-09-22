@@ -1,4 +1,5 @@
 from docx.api import Document
+from docx.opc.exceptions import PackageNotFoundError
 import document as doc
 from pathlib import Path
 from core.resolution import *
@@ -713,9 +714,13 @@ def main():
     """
     Step 1: Read doc and parse to object
     """
-    resolutionRawDocument = doc.document(str(input_filename), str(output_filename))
-    parseResult = parseToResolution(resolutionRawDocument)
-    parsedResolution, components, errorList = parseResult
+    try:
+        resolutionRawDocument = doc.document(str(input_filename), str(output_filename))
+        parseResult = parseToResolution(resolutionRawDocument)
+        parsedResolution, components, errorList = parseResult
+    except PackageNotFoundError:
+        print(f"{Fore.RED}{Style.BRIGHT}Error: invalid input / output path{Style.RESET_ALL}")
+        return
 
     if verbose: print(str(parsedResolution))
 
