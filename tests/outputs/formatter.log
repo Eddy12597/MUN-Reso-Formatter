@@ -1,0 +1,5 @@
+ERROR LOG FOR D:\MUN-Reso-Formatter\tests\inputs\test_problematic.docx
+LINE 1: preambs could not parse: Committee: United Nations General Assembly (UNGA)
+LINE 2: preambs could not parse: Topic: Addressing Climate change through International Cooperation
+LINE 3: preambs could not parse: Co-Submitters: French Republic, Kingdom of Sweden, Italian Republic
+LINE 4: preambs could not parse: Main Submitter: Federal Republic of Germany

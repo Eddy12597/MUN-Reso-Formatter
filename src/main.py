@@ -9,6 +9,7 @@ from typing import Generic, TypeVar, cast, Callable
 import json
 from colorama import Fore, Back, init, Style
 import argparse
+import os
 init() # colorama
 
 verbose: bool = False
@@ -51,7 +52,7 @@ class ResolutionParsingError(BaseException):
         super().__init__(msg)
         self.line = line
     def __str__(self):
-        return super().__str__() + f"\n\tIN LINE {self.line}"
+        return f"LINE {self.line}: {super().__str__()}"
     
 def strip_punctuations(text: str) -> str:
     """
@@ -516,10 +517,42 @@ def parseToResolution (doc: doc.document)\
                                  'operationals']
 
     # ====== Main Loop ======
+    # ====== Main Loop ======
     for index, line in enumerate(paragraphs):
-        if verbose: print(f"{Fore.MAGENTA}{index}{(4-len(str(index)) if len(str(index)) < 4 else len(str(index))) * ' '}{Style.RESET_ALL}| {line}")
+        text = line.strip()
+        if verbose:
+            print(f"{Fore.MAGENTA}{index:3}{Style.RESET_ALL}| {line}")
+
         for componentName in componentsList:
-            components[componentName].extract(line, re.IGNORECASE)
+            comp = components[componentName]
+
+            if comp.matchFunc is not None:
+                try:
+                    val, ok = comp.matchFunc(text)
+                    if val is not None:
+                        comp.appendValue(val)
+                    if not ok and val is not None and getattr(val, "adverb", "") == "__ERROR__":
+                        errorList.append(
+                            ResolutionParsingError(
+                                f"{componentName} could not parse: {text}",
+                                index + 1
+                            )
+                        )
+                except Exception as e:
+                    errorList.append(
+                        ResolutionParsingError(
+                            f"{componentName} parser exception: {e}",
+                            index + 1
+                        )
+                    )
+
+            else:
+                # plain regex components just try to extract
+                before = len(comp.getValues())
+                comp.extract(text, re.IGNORECASE)
+                after = len(comp.getValues())
+                # don’t add errors here – handle at the end if still empty
+
 
     # finalize values (preambs and operationals built by matchFuncs)
     components['preambs'     ].setValue(cast(list[_rc_inner_t], listPreambs))
@@ -527,6 +560,14 @@ def parseToResolution (doc: doc.document)\
 
     components['operationals'].setValue(cast(list[_rc_inner_t], listOperationals))
     components['operationals'].markFinished()
+    
+    # Add errors if key header components were never found at all
+    for cname in ["committee", "mainSubmitter", "topic"]:
+        if not components[cname].getValues():
+            errorList.append(
+                ResolutionParsingError(f"Missing required field: {cname}", -1)
+            )
+
 
     reso = Resolution(
         cast(str, components['committee'].getFirst()),
@@ -682,13 +723,15 @@ def main():
     # Set default filenames
     input_filename: str | Path = Path("../tests/inputs/test_reso.docx")
     output_filename: str | Path = Path("../tests/outputs/test_reso.docx")
+    log_filename: str | Path | None = Path("../tests/outputs/formatter.log")
 
     parser = argparse.ArgumentParser(
                     prog='',
                     description='Formats a resolution (.docx) and outputs file.')
     parser.add_argument('filename', nargs='?', help='input filename (optional)')  # Changed to optional
     parser.add_argument('-v', '--verbose', help='enable verbose mode', action='store_true')
-    parser.add_argument('-o', '--output', help='output filename')
+    parser.add_argument('-o', '--output', nargs='?', help='output filename')
+    parser.add_argument('-l', '--log', nargs='?', help="log file name")
     args = parser.parse_args()
 
     if args.verbose:
@@ -704,11 +747,17 @@ def main():
         if verbose:
             print(f"Output filename: {args.output}")
         output_filename = Path(args.output)
-
+    else:
+        print(f"{Fore.RED}Changing the original file as output filename is not given{Style.RESET_ALL}")
+        output_filename = input_filename
     if verbose:
         print(f"Using input: {input_filename}")
         print(f"Using output: {output_filename}")
     
+    if args.log:
+        if verbose:
+            print(f"Log filename: {args.log}")
+        log_filename = Path(args.log)
     
 
     """
@@ -724,17 +773,21 @@ def main():
 
     if verbose: print(str(parsedResolution))
 
-    if (len(errorList) != 0):
-        print("="*30 + " ERRORS " + "=" * 30)
-        for error in errorList:
-            print(str(error))
-
 
     """
     Step 2: Conflict/Error showing, resolution and confirmation
     """
 
-
+    if (len(errorList) != 0) and args.log:
+        print(f"{Fore.RED}Errors found and corrected. Check {log_filename} for log / errors")
+        with open(str(log_filename), "w") as f:
+            f.write(f"ERROR LOG FOR {os.path.abspath(input_filename)}\n")
+            for error in errorList:
+                f.write(str(error) + "\n")
+    elif len(errorList) != 0:
+        print(f"{Fore.RED}Errors in resolution:{Style.RESET_ALL}")
+        for error in errorList:
+            print(f"{Fore.MAGENTA}{str(error)}{Style.RESET_ALL}")
 
 
     """
