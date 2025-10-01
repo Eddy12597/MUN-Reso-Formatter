@@ -775,11 +775,11 @@ def main():
 
 
     """
-    Step 2: Conflict/Error showing, resolution and confirmation
+    Step 2: Conflict/Error showing
     """
 
     if (len(errorList) != 0) and args.log:
-        print(f"{Fore.RED}Errors found and corrected. Check {log_filename} for log / errors")
+        print(f"{Fore.RED}Errors found and corrected. Check {log_filename} for log / errors{Style.RESET_ALL}")
         with open(str(log_filename), "w") as f:
             f.write(f"ERROR LOG FOR {os.path.abspath(input_filename)}\n")
             for error in errorList:
@@ -789,12 +789,12 @@ def main():
         for error in errorList:
             print(f"{Fore.MAGENTA}{str(error)}{Style.RESET_ALL}")
 
-
     """
     Step 3: Write to file
     """
 
     writeToFile(parsedResolution, output_filename)
+
 
 if __name__ == "__main__":
     main()
