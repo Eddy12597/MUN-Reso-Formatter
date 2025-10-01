@@ -1,10 +1,13 @@
 # MUN-Reso-Formatter
 
-Docx-basd Python App for formatting MUN Resolutions. May be integrated into [website](https://biphmun.netlify.app) as backend.
+Python App for formatting MUN Resolutions made with python-docx. May be integrated into [website](https://mun-chair.netlify.app) or [conference website](https://biphmun.netlify.app) as backend.
 
 ## Build and run
 
-Currently the project is only around 50~60% finished, but you can test the basic extraction functionality.
+Currently the project is only around 50~60% finished, but it can:
+- extract resolution structure to a [`Resolution`](./src/core/resolution.py) object
+- automatically correct errors
+- show where the format of the resolution document is incorrect.
 
 ```bash
 pip install -r requirements.txt
@@ -32,10 +35,13 @@ options:
 
 ### Resolution Format
 
-Sample resolutions are available in `tests/`
+Sample resolutions are available in [`tests/`](./tests/)
 
+## Contributing
 
-### TODO:
+Contributions (issues, PRs) are welcome. You can also add preambulatory/operational phrases by changing [`./src/config/preambs/config.json`](./src/config/preambs/config.json) or [`./src/config/operationals/config.json`](./src/config/operationals/config.json). You can contribute to app logic development in [`./src`](./src), or develop/refine workflow. Raise an issue or submit a PR.
+
+## TODO / Roadmap:
 
 1. Refine Error handling and showing
 2. Enable adding to config (for phrases and adverbs)
