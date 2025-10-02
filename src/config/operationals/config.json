@@ -74,7 +74,27 @@
         "underlines",
         "underscores",
         "urges",
-        "welcomes"
+        "welcomes",
+
+        "establishes",
+        "sets up",
+        "incorporates",
+        "implements",
+        "protects",
+        "ensures",
+        "collaborates",
+        "provides",
+        "develops",
+        "integrates",
+        "assists",
+        "draws attention to",
+        "builds",
+        "bans",
+        "promotes",
+        "highly recommends",
+        "strongly recommends",
+        "require",
+        "expresses"
     ],
     "__comment": "list of phrases that signal a list in sub-items",
     "list_phrases": [
@@ -86,6 +106,7 @@
         "the following",
         "to",
         "by",
-        "for"
+        "for",
+        "in"
     ]
 }
