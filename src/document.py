@@ -6,7 +6,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.numbering import CT_Numbering
 from docx.opc.constants import CONTENT_TYPE as CT, RELATIONSHIP_TYPE as RT
 from typing import Union
-
+from time import sleep
 
 class ResoFormattingError(BaseException):
     def __init__(self, msg: str | None = None):
@@ -480,9 +480,19 @@ class document:
     def save(self, outputfile : str | None = None, verbose: bool = False) -> None:
         if outputfile is None:
             outputfile = self.outputfile
-        self._doc.save(outputfile)
+        printed = False
+        while True:
+            try:
+                self._doc.save(outputfile)
+                break
+            except PermissionError as pe:
+                if not printed:
+                    print(f"Waiting to close the file: {pe.filename}")
+                    printed = True
+                else:
+                    sleep(0.1)
         if verbose: print(f"File saved to {outputfile}")
-    def getdocument(self) -> 'Document': # type: ignore
+    def getdocument(self) -> Document: # type: ignore
         return self._doc
 
     def get_paragraphs(self) -> list[str]:
