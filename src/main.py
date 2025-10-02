@@ -10,6 +10,7 @@ import json
 from colorama import Fore, Back, init, Style
 import argparse
 import os
+from sys import exit
 init() # colorama
 
 verbose: bool = False
@@ -718,9 +719,13 @@ def writeToFile(resolution, filename: str | Path) -> int:
     return 0
 
 
-def main():
+def main() -> int:
+    
+    """
+    Step 0: Parse args
+    """
+    
     global verbose
-    # Set default filenames
     input_filename: str | Path = Path("../tests/inputs/test_reso.docx")
     output_filename: str | Path = Path("../tests/outputs/test_reso.docx")
     log_filename: str | Path | None = Path("../tests/outputs/formatter.log")
@@ -737,7 +742,6 @@ def main():
     if args.verbose:
         verbose = True
     
-    # Use the positional filename argument if provided
     if args.filename:
         if verbose:
             print(f"Input filename: {args.filename}")
@@ -763,13 +767,14 @@ def main():
     """
     Step 1: Read doc and parse to object
     """
+    
     try:
         resolutionRawDocument = doc.document(str(input_filename), str(output_filename))
         parseResult = parseToResolution(resolutionRawDocument)
         parsedResolution, components, errorList = parseResult
     except PackageNotFoundError:
         print(f"{Fore.RED}{Style.BRIGHT}Error: invalid input / output path{Style.RESET_ALL}")
-        return
+        return 1
 
     if verbose: print(str(parsedResolution))
 
@@ -794,7 +799,8 @@ def main():
     """
 
     writeToFile(parsedResolution, output_filename)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    exit(main()) # sys.exit
