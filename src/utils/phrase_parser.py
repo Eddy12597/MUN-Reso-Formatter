@@ -1,4 +1,5 @@
 # utility for converting new-line separated input to json list
+# usage: echo "..." | python phrase_parser.py
 
 import json
 import sys
