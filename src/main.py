@@ -250,6 +250,7 @@ def parseToResolution (doc: doc.document)\
     # make patterns more permissive (allow colon, dash, or whitespace separators)
     components['committee'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'committee\s*[:\-\s]\s*(.*)', r'committee[:\-\s]*(.*)',
+        r'submitted to\s*[:\-\s]\s*(.*)', r'submitted to[:\-\s]*(.*)',
     ]))
 
     components['mainSubmitter'] = cast(_rc_t, ResolutionComponent[str](patterns=[
@@ -264,6 +265,7 @@ def parseToResolution (doc: doc.document)\
 
     components['topic'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'topic[s]?\s*[:\-\s]\s*(.*)', r'topic[s]?\s*[:\-\s]*(.*)',
+        r'subject[s]?\s*[:\-\s]\s*(.*)', r'subject[s]?\s*[:\-\s]*(.*)',
     ]))
 
     listPreambs: list[preamb] = []
@@ -318,7 +320,8 @@ def parseToResolution (doc: doc.document)\
         for phrase in sorted(set(preamb_phrases), key=len, reverse=True):
             ph_esc = re.escape(phrase)
             # match phrase at start (optionally preceded by quotes/parentheses) and capture remainder
-            pattern = rf'^\s*[\(\["\']*\s*{ph_esc}\b(?:\s+(.*?))?\s*[,;]?\s*$'
+            # pattern = rf'^\s*[\(\["\']*\s*{ph_esc}\b(?:\s+(.*?))?\s*[,;]?\s*$'
+            pattern = rf'^\s*[\(\["\']*\s*{ph_esc}\b[ ,]*(.*)$'
             m = re.match(pattern, raw, flags=re.IGNORECASE)
             if m:
                 remainder = (m.group(1) or "").strip()
@@ -429,7 +432,7 @@ def parseToResolution (doc: doc.document)\
                 verb = sanitize_text(verb_phrase.strip())
                 clause_text = sanitize_text(rest_of_sentence if rest_of_sentence else "")
             else:
-                verb = "clause verb"
+                verb = ""#clause verb"
                 clause_text = sanitize_text(body)
 
             new_clause = clause(idx, verb=verb, text=clause_text)
@@ -518,7 +521,6 @@ def parseToResolution (doc: doc.document)\
                                  'operationals']
 
     # ====== Main Loop ======
-    # ====== Main Loop ======
     for index, line in enumerate(paragraphs):
         text = line.strip()
         if verbose:
@@ -553,6 +555,7 @@ def parseToResolution (doc: doc.document)\
                 comp.extract(text, re.IGNORECASE)
                 after = len(comp.getValues())
                 # don’t add errors here – handle at the end if still empty
+                # TODO
 
 
     # finalize values (preambs and operationals built by matchFuncs)
@@ -582,7 +585,7 @@ def parseToResolution (doc: doc.document)\
 
     return (reso, components, errorList)
 
-def writeToFile(resolution, filename: str | Path) -> int:
+def writeToFile(resolution: Resolution, filename: str | Path) -> int:
     outDoc = doc.document(None, str(filename), line_spacing=2)
 
     topicPar = doc.paragraph(bold=True)
@@ -603,7 +606,7 @@ def writeToFile(resolution, filename: str | Path) -> int:
 
     committeeSubjectPar = doc.paragraph(
         f"The {' '.join(
-            word.capitalize() for word in resolution.committee.split(' ')[:-1]
+            word.capitalize() for word in resolution.committee.split(' ')#[:-1]
         )},",
         bold=False
     )
@@ -659,9 +662,9 @@ def writeToFile(resolution, filename: str | Path) -> int:
         # Clause-level formatting
         if isinstance(theclause, clause):
             par = doc.paragraph(list_level=1)
-            par.add_run(theclause.verb.capitalize() + " ", underline=True)
+            par.add_run(theclause.verb.capitalize(), underline=True)
             has_children = bool(getattr(theclause, "listsubclauses", []))
-            par.add_run(choose_end(theclause.text, is_last, False, has_children))
+            par.add_run(" " + choose_end(theclause.text, is_last, False, has_children))
             paragraphs.append(par)
 
             # Recurse into subclauses
