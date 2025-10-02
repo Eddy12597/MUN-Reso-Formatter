@@ -4,7 +4,8 @@ Python App for formatting MUN Resolutions made with python-docx. May be integrat
 
 ## Build and run
 
-Currently the project is only around 50~60% finished, but it can:
+Currently the project is around 60~70% finished, but it can:
+- pop up GUI window
 - extract resolution structure to a [`Resolution`](./src/core/resolution.py) object
 - automatically correct errors
 - show where the format of the resolution document is incorrect.
@@ -45,7 +46,10 @@ Contributions (issues, PRs) are welcome. You can also add preambulatory/operatio
 
 1. Refine Error handling and showing
 2. Enable adding to config (for phrases and adverbs)
-3. Develop GUI (with input fields and upload file)
+3. Upgrade GUI:
+    - Preview (tree view of clauses)
+    - Verbose mode
+    - Drag and drop
 4. Integrate to website if appropriate
 5. (Far future) allow amendment logic and apply amendments (though probably nobody cares)
 
