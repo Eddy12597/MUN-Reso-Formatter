@@ -1,4 +1,7 @@
 from sys import exit
+import os
+import platform
+import subprocess
 
 import main as parser
 import tkinter as tk
@@ -22,6 +25,7 @@ class ResolutionFormatterGUI:
         # Variables
         self.input_var = tk.StringVar()
         self.output_var = tk.StringVar()
+        self.formatted_file_path = None  # Store path of last formatted document
         
         self.setup_ui()
         
@@ -68,6 +72,12 @@ class ResolutionFormatterGUI:
                   command=self.clear_all).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Exit", 
                   command=self.root.quit).pack(side=tk.LEFT, padx=5)
+        
+        # Open Formatted Document button (initially hidden)
+        self.open_button = ttk.Button(button_frame, text="Open Formatted Document", 
+                                     command=self.open_formatted_document)
+        self.open_button.pack(side=tk.LEFT, padx=5)
+        self.open_button.pack_forget()  # Hide initially
         
         # Status bar
         self.status_var = tk.StringVar(value="Ready")
@@ -145,6 +155,35 @@ class ResolutionFormatterGUI:
         self.input_var.set("")
         self.output_var.set("")
         self.status_var.set("Ready")
+        self.hide_open_button()
+    
+    def hide_open_button(self):
+        """Hide the Open Formatted Document button"""
+        self.open_button.pack_forget()
+        self.formatted_file_path = None
+    
+    def show_open_button(self):
+        """Show the Open Formatted Document button"""
+        self.open_button.pack(side=tk.LEFT, padx=5)
+    
+    def open_formatted_document(self):
+        """Open the formatted document using the system's default application"""
+        if self.formatted_file_path and Path(self.formatted_file_path).exists():
+            try:
+                if platform.system() == "Windows":
+                    os.startfile(self.formatted_file_path)
+                elif platform.system() == "Darwin":  # macOS
+                    subprocess.run(["open", self.formatted_file_path])
+                else:  # Linux and other Unix-like systems
+                    subprocess.run(["xdg-open", self.formatted_file_path])
+                self.status_var.set("Opened formatted document")
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open document:\n{str(e)}")
+                self.status_var.set("Error opening document")
+        else:
+            messagebox.showwarning("File Not Found", 
+                                 "The formatted document could not be found. It may have been moved or deleted.")
+            self.hide_open_button()
     
     def run(self):
         if not self.validate_inputs():
@@ -165,6 +204,7 @@ class ResolutionFormatterGUI:
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred:\n{str(e)}")
             self.status_var.set("Error occurred")
+            self.hide_open_button()
         finally:
             # Restore UI state
             self.root.config(cursor="")
@@ -175,6 +215,10 @@ class ResolutionFormatterGUI:
             resolutionRawDocument = doc.document(str(input_path), str(output_path))
             parsedResolution, components, errorList = parser.parseToResolution(resolutionRawDocument)
             parser.writeToFile(parsedResolution, output_path)
+            
+            # Store the path and show the open button
+            self.formatted_file_path = str(output_path)
+            self.show_open_button()
             
             if errorList:
                 errors = "\n".join(str(e) for e in errorList)
@@ -189,9 +233,11 @@ class ResolutionFormatterGUI:
         except PackageNotFoundError:
             messagebox.showerror("Error", "Invalid Word document file path or corrupted document")
             self.status_var.set("Error: Invalid document")
+            self.hide_open_button()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to process document:\n{str(e)}")
             self.status_var.set("Error: Processing failed")
+            self.hide_open_button()
 
 def main() -> int:
     root = tk.Tk()
