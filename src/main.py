@@ -647,7 +647,7 @@ def writeToFile(resolution: Resolution, filename: str | Path) -> int:
         def choose_end(text: str, is_last: bool, last_within_top_clause: bool, has_children: bool = False) -> str:
             base = text.rstrip(",.").rstrip(":").rstrip(";")
             # 1) if it has children or ends with a list phrase -> colon (overrides absolute last)
-            if has_children or _ends_with_list_phrase(text):
+            if has_children or _ends_with_list_phrase(text): # TODO: determine if remove has_children condition
                 return base + ":"
             # 2) absolute last leaf -> period
             if is_last:
