@@ -1,4 +1,3 @@
-from icecream import ic
 from docx.api import Document
 import document as doc
 

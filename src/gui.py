@@ -14,7 +14,7 @@ class ResolutionFormatterGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Resolution Formatter")
-        self.root.geometry("600x250")
+        self.root.geometry("720x300")
         self.root.resizable(True, True)
         
         # Configure style
@@ -32,7 +32,7 @@ class ResolutionFormatterGUI:
     def setup_ui(self):
         # Main frame with padding
         main_frame = ttk.Frame(self.root, padding="20")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S)) # type: ignore
         
         # Configure grid weights for responsiveness
         self.root.columnconfigure(0, weight=1)
@@ -83,7 +83,7 @@ class ResolutionFormatterGUI:
         self.status_var = tk.StringVar(value="Ready")
         status_bar = ttk.Label(self.root, textvariable=self.status_var, 
                               relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        status_bar.grid(row=1, column=0, sticky=(tk.W, tk.E)) # type: ignore
         
     def auto_fill_output(self, *args):
         """Auto-generate output path when input path is provided"""
