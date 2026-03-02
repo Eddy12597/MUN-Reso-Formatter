@@ -1,6 +1,6 @@
 import src.main as formatter
 import src.document as mydoc
-from flask import Flask, request, send_file, render_template_string
+from flask import Flask, request, send_file, render_template_string, after_this_request
 from flask_cors import CORS
 import os
 from werkzeug.utils import secure_filename
@@ -65,10 +65,18 @@ def upload_file():
         
         
         # Send the processed file back to user
+        @after_this_request
+        def cleanup(response):
+            try:
+                os.unlink(temp_input.name)
+            except Exception as e:
+                app.logger.error(f"Error deleting temp file: {e}")
+            return response
+
         return send_file(
             temp_input.name,
             as_attachment=True,
-            download_name=f"{filename}",
+            download_name=f"Formatted_{filename}",
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         )
         
@@ -78,9 +86,9 @@ def upload_file():
     finally:
         # Clean up temporary files
         try:
-            os.unlink(temp_input.name)
+            os.unlink(temp_input.name) # type: ignore
         except:
             pass
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+# if __name__ == '__main__':
+#     app.run(debug=True, port=5000)
