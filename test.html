@@ -1,0 +1,185 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 40px;
+            text-align: center;
+            border-radius: 10px;
+        }
+        .upload-area:hover {
+            border-color: #999;
+        }
+        .file-info {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Document Processor</h1>
+    <p>Upload a .docx file to process</p>
+    
+    <div class="upload-area" id="dropZone">
+        <input type="file" id="fileInput" accept=".docx" style="display: none;">
+        <p>Drag and drop a file here, or click to select</p>
+        <button onclick="document.getElementById('fileInput').click()">Select File</button>
+    </div>
+    
+    <div class="file-info" id="fileInfo" style="display: none;">
+        <p><strong>Selected file:</strong> <span id="fileName"></span></p>
+        <p><strong>Size:</strong> <span id="fileSize"></span></p>
+    </div>
+    
+    <div style="text-align: center;">
+        <button id="processBtn" disabled onclick="processFile()">Process Document</button>
+    </div>
+    
+    <div id="status"></div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const processBtn = document.getElementById('processBtn');
+        const status = document.getElementById('status');
+        
+        let selectedFile = null;
+
+        // Handle drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#4CAF50';
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.docx')) {
+                handleFileSelect(file);
+            } else {
+                showStatus('Please select a .docx file', 'error');
+            }
+        });
+        
+        // Handle file input click
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+        
+        function handleFileSelect(file) {
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileSize.textContent = (file.size / 1024).toFixed(2) + ' KB';
+            fileInfo.style.display = 'block';
+            processBtn.disabled = false;
+            clearStatus();
+        }
+        
+        async function processFile() {
+            if (!selectedFile) return;
+            
+            // Disable button and show loading
+            processBtn.disabled = true;
+            showStatus('Processing...', '');
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            
+            try {
+                // Send to backend
+                const response = await fetch('http://localhost:5000/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Upload failed');
+                }
+                
+                // Get the blob from response
+                const blob = await response.blob();
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'processed_' + selectedFile.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                
+                showStatus('File processed and downloaded successfully!', 'success');
+                
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            } finally {
+                processBtn.disabled = false;
+            }
+        }
+        
+        function showStatus(message, type) {
+            status.innerHTML = `<p class="${type}">${message}</p>`;
+        }
+        
+        function clearStatus() {
+            status.innerHTML = '';
+        }
+    </script>
+</body>
+</html>

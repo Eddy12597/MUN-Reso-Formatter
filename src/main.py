@@ -1,8 +1,8 @@
 from docx.api import Document
 from docx.opc.exceptions import PackageNotFoundError
-import document as doc
+import src.document as doc
 from pathlib import Path
-from core.resolution import *
+from src.core.resolution import *
 import re
 import roman
 from typing import Generic, TypeVar, cast, Callable
@@ -17,8 +17,8 @@ verbose: bool = False
 
 # ==== CONFIG ====
 
-preamb_config_path = Path("./config/preambs/config.json")
-operationals_config_path = Path("./config/operationals/config.json")
+preamb_config_path = Path("./src/config/preambs/config.json")
+operationals_config_path = Path("./src/config/operationals/config.json")
 
 preamb_config: dict[str, list[str] | str | dict] = {}
 with preamb_config_path.open("r", encoding="utf-8") as f:
@@ -62,100 +62,6 @@ def strip_punctuations(text: str) -> str:
     for punc in [',', '.', ';', ':', '!', '?']:
         text = text.replace(f" {punc}", f"{punc}")
     return text
-
-"""
-def extract_first_participial_phrase(text: str) -> tuple[str | None, str]:
-    doc = nlp(text)
-    
-    for i, token in enumerate(doc):
-        # Check for participles more carefully
-        is_participle = (
-            token.pos_ == 'VERB' and 
-            token.morph.get('VerbForm', None) == ['Part']
-        )
-        
-        # Also check for words ending with -ing, -ed, -en that might be participles
-        is_likely_participle = (
-            token.pos_ == 'VERB' and 
-            (token.text.endswith('ing') or 
-             token.text.endswith('ed') or 
-             token.text.endswith('en'))
-        )
-        
-        if is_participle or is_likely_participle:
-            # Start building the participial phrase
-            phrase_tokens = [token.text]
-            j = i + 1
-            
-            # Include modifiers, prepositions, particles, etc.
-            while (j < len(doc) and 
-                  (doc[j].pos_ in ['ADP', 'ADV', 'PART', 'SCONJ'] or 
-                   doc[j].dep_ in ['prep', 'agent', 'pcomp', 'mark', 'advmod'])):
-                phrase_tokens.append(doc[j].text)
-                j += 1
-            
-            # Extract the first participial phrase
-            participial_phrase = ' '.join(phrase_tokens)
-            remaining_text = ' '.join([t.text for t in doc[j:]])
-            remaining_text = strip_punctuations(remaining_text)
-            print("Participial phrase: " + participial_phrase + ", remaining: " + remaining_text)
-            return participial_phrase, remaining_text
-    
-    return None, text
-
-# Doesn't work for 'be' verbs and 'will' aux verbs
-def extract_first_verb(text: str) -> tuple[str | None, str | None, bool]:
-    \"""
-    Extracts first verb from a sentence. Includes a preposition after the verb if there is any (used for the clause verb extraction). Returns the verb and the preposition, the rest of the sentence, and whether it occurs at the beginning of the sentence.
-    Params:
-    ------------
-    text: str
-        The text in which to extract the first verb
-    Returns:
-    ------------
-    tuple [str | None, str, bool]
-        1. The first element (str | None): 
-            the verb of the sentence. If there is no verb in the sentence or if the sentence is empty, returns None
-
-        2. The second element (str | None): 
-            the rest of the sentence. If the sentence is empty, returns None
-
-        3. The third element (bool):
-            whether the verb occurs at the beginning of the sentence. If it does not, or if the text is empty, or if the text contains no verb, returns False
-    \"""
-    if not text or text.isspace():
-        return None, None, False
-
-    doc = nlp(text)
-    
-    for i, token in enumerate(doc):
-        if token.pos_ in ['VERB', 'AUX']:
-            # Check if this is part of a phrasal verb
-            verb_phrase = token.text
-            
-            # Look for particles/prepositions that might be part of phrasal verbs
-            if i + 1 < len(doc) and doc[i+1].dep_ in ['prt', 'prep']:
-                verb_phrase += " " + doc[i+1].text
-            
-            # Reconstruct the rest of the sentence
-            tokens_to_remove = [token]
-            if i + 1 < len(doc) and doc[i+1].dep_ in ['prt', 'prep']:
-                tokens_to_remove.append(doc[i+1])
-            
-            rest_of_sentence = ' '.join([
-                t.text for t in doc 
-                if t not in tokens_to_remove and not t.is_space
-            ]).strip()
-            
-            # Clean up punctuation
-            rest_of_sentence = strip_punctuations(rest_of_sentence)
-            return verb_phrase, rest_of_sentence, i == 0
-    
-    # No verb found
-    rest_of_sentence = ' '.join([t.text for t in doc if not t.is_space]).strip()
-    rest_of_sentence = strip_punctuations(rest_of_sentence)
-    return None, rest_of_sentence, False
-"""
 
 # === TYPES to silence the type checker ===
 type _rc_inner_t = str | preamb | clause
@@ -251,11 +157,14 @@ def parseToResolution (doc: doc.document)\
     components['committee'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'committee\s*[:\-\s]\s*(.*)', r'committee[:\-\s]*(.*)',
         r'submitted to\s*[:\-\s]\s*(.*)', r'submitted to[:\-\s]*(.*)',
+        r'forum\s*[:\-\s]\s*(.*)', r'forum[:\-\s]*(.*)',
     ]))
 
     components['mainSubmitter'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'main[\s\-]*submitter[s]?\s*[:\-\s]\s*(.*)',
         r'main[\s\-]*submitter[s]?\s*[:\-\s]*(.*)',
+        r'main[\s\-]*submitted by[s]?\s*[:\-\s]\s*(.*)',
+        r'main[\s\-]*submitted by[s]?\s*[:\-\s]*(.*)',
     ]))
 
     components['coSubmitters'] = cast(_rc_t, ResolutionComponent[str](patterns=[
@@ -266,6 +175,7 @@ def parseToResolution (doc: doc.document)\
     components['topic'] = cast(_rc_t, ResolutionComponent[str](patterns=[
         r'topic[s]?\s*[:\-\s]\s*(.*)', r'topic[s]?\s*[:\-\s]*(.*)',
         r'subject[s]?\s*[:\-\s]\s*(.*)', r'subject[s]?\s*[:\-\s]*(.*)',
+        r'question of[s]?\s*[:\-\s]\s*(.*)', r'question of[s]?\s*[:\-\s]*(.*)',
     ]))
 
     listPreambs: list[preamb] = []
@@ -612,7 +522,7 @@ def writeToFile(resolution: Resolution, filename: str | Path) -> int:
     )
 
     # --- preambs ---
-    preambs: list[doc.paragraph] = []
+    preambs: list = []
     for pre in resolution.preambs:
         temp = doc.paragraph()
         temp.add_run(pre.adverb.capitalize(), italic=True)
@@ -662,7 +572,7 @@ def writeToFile(resolution: Resolution, filename: str | Path) -> int:
         # Clause-level formatting
         if isinstance(theclause, clause):
             par = doc.paragraph(list_level=1)
-            par.add_run(theclause.verb.capitalize(), underline=True)
+            par.add_run(theclause.verb.capitalize(), underline=True, italic=True)
             has_children = bool(getattr(theclause, "listsubclauses", []))
             par.add_run(" " + choose_end(theclause.text, is_last, False, has_children))
             paragraphs.append(par)

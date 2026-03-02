@@ -1,6 +1,6 @@
-from core.preambs import *
-from core.operationals import *
-import document as doc
+from src.core.preambs import *
+from src.core.operationals import *
+import src.document as doc
 from colorama import Fore, Back, Style, init
 init() # colorama
 

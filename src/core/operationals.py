@@ -1,5 +1,5 @@
 from docx.api import Document
-import document as doc
+import src.document as doc
 
 class subsubclause:
     def __init__(self,

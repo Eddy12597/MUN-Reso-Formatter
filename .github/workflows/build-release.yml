@@ -1,0 +1,81 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: formatreso-linux
+            pyinstaller_os: linux
+          - os: macos-latest
+            artifact_name: formatreso-macos
+            pyinstaller_os: darwin
+          - os: windows-latest
+            artifact_name: formatreso-windows
+            pyinstaller_os: windows
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        # Add any other dependencies your project needs
+        # pip install -r requirements.txt
+
+    - name: Build with PyInstaller
+      run: |
+        cd src
+        pyinstaller --onefile --name ${{ matrix.artifact_name }} main.py
+        pyinstaller --onefile --icon=../favicon.ico --name ${{ matrix.artifact_name }}-gui gui.py
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact_name }}
+        path: dist/${{ matrix.artifact_name }}*
+        retention-days: 1
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: List artifacts
+      run: |
+        find ./artifacts -type f
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          Automated release with binaries for:
+          - Linux
+          - macOS  
+          - Windows
+        files: |
+          artifacts/**/*
