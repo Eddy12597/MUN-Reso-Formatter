@@ -26,12 +26,79 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def process_document(filename: str):
+def getCommitteeShortened(committee: str) -> str:
+    result = {
+        "environment programme": "unep",
+        "un environment programme": "unep",
+        "environment programme (unep)": "unep",
+        "un environment programme (unep)": "unep",
+        "environment programme(unep)": "unep",
+        "un environment programme(unep)": "unep",
+
+        "united nations environment programme": "unep",
+        "united nations environment programme (unep)": "unep",
+        "environment programme(unep)": "unep",
+        "united nations environment programme(unep)": "unep",
+        
+        "historical human rights council": "hhrc",
+        "human rights council": "hrc",
+        "historical human rights council (hhrc)": "hhrc",
+        "human rights council (hrc)": "hrc",
+        "historical human rights council(hhrc)": "hhrc",
+        "human rights council(hrc)": "hrc",
+        
+        "united nations historical human rights council": "hhrc",
+        "united nations human rights council": "hrc",
+        "united nations historical human rights council (hhrc)": "hhrc",
+        "united nations human rights council (hrc)": "hrc",
+        "united nations historical human rights council(hhrc)": "hhrc",
+        "united nations human rights council(hrc)": "hrc",
+        
+        "general assembly": "ga",
+        "united nations general assembly": "ga",
+        "general assembly (ga)": "ga",
+        "united nations general assembly (ga)": "ga",
+        "general assembly (unga)": "ga",
+        "united nations general assembly (unga)": "ga",
+        "general assembly(ga)": "ga",
+        "united nations general assembly(ga)": "ga",
+        "general assembly(unga)": "ga",
+        "united nations general assembly(unga)": "ga",
+        
+        "general assembly": "ga",
+        "un general assembly": "ga",
+        "general assembly (ga)": "ga",
+        "un general assembly (ga)": "ga",
+        "general assembly (unga)": "ga",
+        "un general assembly (unga)": "ga",
+        "general assembly(ga)": "ga",
+        "un general assembly(ga)": "ga",
+        "general assembly(unga)": "ga",
+        "un general assembly(unga)": "ga",
+
+        "security council": "sc",
+        "united nations security council": "sc",
+        "security council (unsc)": "sc",
+        "united nations security council (unsc)": "sc",
+        "security council": "sc",
+        "un security council": "sc",
+        "security council (unsc)": "sc",
+        "un security council (unsc)": "sc"
+    }.get(committee.lower())
     
+    
+    if result is not None:
+        return result.upper()
+    # print("Unable to get shorthand for committee:", committee)
+    return committee
+
+def process_document(filename: str):
     d = mydoc.document(str(Path(filename)), str(Path(filename)))
     parseResult = formatter.parseToResolution(d)
     parsedResolution, components, errorList = parseResult
-    formatter.writeToFile(parsedResolution, filename)
+    mainSub = parsedResolution.mainSubmitter
+    cmt = getCommitteeShortened(parsedResolution.committee)
+    formatter.writeToFile(parsedResolution, f"DR_{mainSub}_{cmt}")
 
 @app.route('/')
 def index():
