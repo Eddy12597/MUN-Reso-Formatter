@@ -147,6 +147,10 @@ def upload_file():
             download_name=custom_filename,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
+        # Add custom header with filename
+        response.headers['X-Filename'] = custom_filename
+        # Expose both headers
+        response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition, X-Filename'
         response.headers['Content-Disposition'] = f'attachment; filename="{custom_filename}"'
         return response
         
