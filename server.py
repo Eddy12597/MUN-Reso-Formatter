@@ -8,6 +8,7 @@ import tempfile
 from docx import Document
 import io
 from pathlib import Path
+from version import get_version_info
 
 app = Flask(__name__)
 CORS(app)  # This allows your frontend to talk to backend
@@ -34,7 +35,8 @@ def process_document(filename: str):
 
 @app.route('/')
 def index():
-    return "Backend is running! Use /upload to upload files."
+    version_info = get_version_info()
+    return f"Backend is running! Use /upload to upload files.\n\n{version_info}"
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
