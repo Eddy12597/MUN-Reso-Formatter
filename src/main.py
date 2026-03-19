@@ -198,11 +198,14 @@ def parseToResolution (doc: doc.document)\
         return s
     
     def normalize_committee(name: str) -> str:
+        # Also remove parentheses from the comparison text to ensure a match
         name = re.sub(r'\s*\([^)]*\)', '', name)
         return name.strip().lower()
 
     def is_intro_line(text: str, committee_name: str) -> bool:
-        norm_text = re.sub(r'[,\s]+$', '', text.strip()).lower()
+        # Strip trailing punctuation/space and parentheses from the line to match normalized committee
+        norm_text = re.sub(r'[,\s]+$', '', text.strip())
+        norm_text = re.sub(r'\s*\([^)]*\)', '', norm_text).lower()
         norm_committee = normalize_committee(committee_name)
         return norm_text == f"the {norm_committee}"
 
@@ -433,39 +436,37 @@ def parseToResolution (doc: doc.document)\
     # ====== Main Loop ======
     for index, line in enumerate(paragraphs):
         text = line.strip()
-        if verbose:
-            print(f"{Fore.MAGENTA}{index:3}{Style.RESET_ALL}| {line}")
+        if not text: continue
+        if verbose: print(f"{Fore.MAGENTA}{index:3}{Style.RESET_ALL}| {line}")
 
-        for componentName in componentsList:
+        # 1. Check Headers First (Regex-based)
+        header_matched = False
+        for componentName in ['committee', 'mainSubmitter', 'coSubmitters', 'topic']:
             comp = components[componentName]
+            before = len(comp.getValues())
+            comp.extract(text, re.IGNORECASE)
+            if len(comp.getValues()) > before:
+                header_matched = True
+                break 
+        
+        if header_matched: continue
 
-            if comp.matchFunc is not None:
-                try:
-                    val, ok = comp.matchFunc(text)
-                    if val is not None:
-                        comp.appendValue(val)
-                    if not ok and val is not None and getattr(val, "adverb", "") == "__ERROR__":
-                        errorList.append(
-                            ResolutionParsingError(
-                                f"{componentName} could not parse: {text}",
-                                index + 1
-                            )
-                        )
-                except Exception as e:
-                    errorList.append(
-                        ResolutionParsingError(
-                            f"{componentName} parser exception: {e}",
-                            index + 1
-                        )
-                    )
-
-            else:
-                # plain regex components just try to extract
-                before = len(comp.getValues())
-                comp.extract(text, re.IGNORECASE)
-                after = len(comp.getValues())
-                # don’t add errors here – handle at the end if still empty
-                # TODO
+        # 2. Check Structural Components (MatchFunc-based)
+        for componentName in ['preambs', 'operationals']:
+            comp = components[componentName]
+            if comp.matchFunc is None: continue
+            
+            try:
+                val, ok = comp.matchFunc(text)
+                # Only append if it's a valid structural match
+                if ok and val is not None:
+                    # Note: MatchFuncs already append to listPreambs/listOperationals
+                    # This appendValue is for the component's internal state
+                    comp.appendValue(val)
+                    break # Stop looking once a line is claimed as a clause/preamb
+            except Exception as e:
+                errorList.append(ResolutionParsingError(f"{componentName} parser exception: {e}", index + 1))
+                
 
 
     # finalize values (preambs and operationals built by matchFuncs)
@@ -525,7 +526,9 @@ def writeToFile(resolution: Resolution, filename: str | Path) -> int:
     preambs: list = []
     for pre in resolution.preambs:
         temp = doc.paragraph()
-        temp.add_run(pre.adverb.capitalize(), italic=True)
+        # Custom capitalization to preserve acronyms like (UNGA)
+        formatted_adverb = pre.adverb[0].upper() + pre.adverb[1:] if pre.adverb else ""
+        temp.add_run(formatted_adverb, italic=True)
         temp.add_run(" " + pre.content + ",", italic=False)
         preambs.append(temp)
 
@@ -639,9 +642,9 @@ def main() -> int:
     """
     
     global verbose
-    input_filename: str | Path = Path("../tests/inputs/test_reso.docx")
-    output_filename: str | Path = Path("../tests/outputs/test_reso.docx")
-    log_filename: str | Path | None = Path("../tests/outputs/formatter.log")
+    input_filename: str | Path = Path("./tests/inputs/test_reso.docx")
+    output_filename: str | Path = Path("./tests/outputs/test_reso.docx")
+    log_filename: str | Path | None = Path("./tests/outputs/formatter.log")
 
     parser = argparse.ArgumentParser(
                     prog='',
