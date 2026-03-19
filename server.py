@@ -11,7 +11,7 @@ from pathlib import Path
 from version import get_version_info
 
 app = Flask(__name__)
-CORS(app)  # This allows your frontend to talk to backend
+CORS(app, expose_headers=['Content-Disposition', 'Content-Type'])
 
 # Configure upload settings
 UPLOAD_FOLDER = 'uploads'
@@ -92,13 +92,14 @@ def getCommitteeShortened(committee: str) -> str:
     # print("Unable to get shorthand for committee:", committee)
     return committee
 
-def process_document(filename: str):
+def process_document(filename: str) -> tuple[str, str]:
     d = mydoc.document(str(Path(filename)), str(Path(filename)))
     parseResult = formatter.parseToResolution(d)
     parsedResolution, components, errorList = parseResult
     mainSub = parsedResolution.mainSubmitter
     cmt = getCommitteeShortened(parsedResolution.committee)
-    formatter.writeToFile(parsedResolution, f"DR_{mainSub}_{cmt}")
+    formatter.writeToFile(parsedResolution, filename)
+    return mainSub, cmt
 
 @app.route('/')
 def index():
@@ -129,9 +130,7 @@ def upload_file():
         temp_input.close()
         
         # Process the document
-        process_document(temp_input.name)        
-        
-        
+        mainSub, cmt = process_document(temp_input.name)
         
         # Send the processed file back to user
         @after_this_request
@@ -141,13 +140,15 @@ def upload_file():
             except Exception as e:
                 app.logger.error(f"Error deleting temp file: {e}")
             return response
-
-        return send_file(
+        custom_filename = f"DR_{mainSub}_{cmt}"
+        response = send_file(
             temp_input.name,
             as_attachment=True,
-            download_name=f"Formatted_{filename}",
-            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            download_name=custom_filename,
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
+        response.headers['Content-Disposition'] = f'attachment; filename="{custom_filename}"'
+        return response
         
     except Exception as e:
         return {'error': str(e)}, 500
