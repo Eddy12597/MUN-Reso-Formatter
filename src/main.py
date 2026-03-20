@@ -165,11 +165,17 @@ def parseToResolution (doc: doc.document)\
         r'main[\s\-]*submitter[s]?\s*[:\-\s]*(.*)',
         r'main[\s\-]*submitted by[s]?\s*[:\-\s]\s*(.*)',
         r'main[\s\-]*submitted by[s]?\s*[:\-\s]*(.*)',
+        r'submitted by[s]?\s*[:\-\s]*(.*)',
+        r'submitted by[s]?\s*[:\-\s]\s*(.*)'
     ]))
 
     components['coSubmitters'] = cast(_rc_t, ResolutionComponent[str](patterns=[
-        r'co[\s\-]*submitter[s]?\s*[:\-\s]\s*(.*)', r'co[\s\-]*submitter[s]?\s*[:\-\s]*(.*)',
-        r'cosubmitter[s]?\s*[:\-\s]\s*(.*)', r'cosubmitter[s]?\s*[:\-\s]*(.*)',
+        r'co[\s\-]*submitter[s]?\s*[:\-\s]\s*(.*)', 
+        r'co[\s\-]*submitter[s]?\s*[:\-\s]*(.*)',
+        r'cosubmitter[s]?\s*[:\-\s]\s*(.*)', 
+        r'cosubmitter[s]?\s*[:\-\s]*(.*)',
+        r'co[\s\-]*submitted\s+by\s*[:\-\s]?\s*(.*)',
+        r'co[\s\-]*submitted\s+by\s*(.*)',
     ]))
 
     components['topic'] = cast(_rc_t, ResolutionComponent[str](patterns=[
